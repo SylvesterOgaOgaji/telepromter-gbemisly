@@ -12,6 +12,7 @@ import {
   Tv,
   Activity,
   Linkedin,
+  Facebook,
   BookOpen,
   CheckCircle2
 } from 'lucide-react';
@@ -107,6 +108,27 @@ export const OwnerModal: React.FC<OwnerModalProps> = ({
                 </div>
               </div>
               <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover:text-amber-300" />
+            </a>
+
+            {/* Facebook Profile */}
+            <a
+              href="https://www.facebook.com/gbemisola.akinlade/"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-between p-3 bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-blue-400/50 rounded-xl transition-all group"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-blue-500/15 text-blue-400 rounded-lg">
+                  <Facebook className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-200 group-hover:text-blue-300">
+                    Facebook Profile
+                  </div>
+                  <div className="text-[10px] text-slate-400">Gbemisola Akinlade</div>
+                </div>
+              </div>
+              <ExternalLink className="w-3.5 h-3.5 text-slate-500 group-hover:text-blue-300" />
             </a>
 
             {/* LinkedIn Profile */}

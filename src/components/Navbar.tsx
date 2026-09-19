@@ -12,7 +12,8 @@ import {
   ExternalLink,
   Globe,
   Activity,
-  Linkedin
+  Linkedin,
+  Facebook
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -91,6 +92,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Activity className="w-3.5 h-3.5 text-amber-400" />
               <span>Fresh & Fit</span>
+            </a>
+
+            <a 
+              href="https://www.facebook.com/gbemisola.akinlade/" 
+              target="_blank" 
+              rel="noreferrer"
+              title="Facebook Profile: Gbemisola Akinlade"
+              className="p-1.5 text-slate-400 hover:text-blue-400 transition-colors rounded-lg hover:bg-slate-900"
+            >
+              <Facebook className="w-4 h-4" />
             </a>
 
             <a 
