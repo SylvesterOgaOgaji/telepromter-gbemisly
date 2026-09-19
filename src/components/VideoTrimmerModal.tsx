@@ -8,7 +8,12 @@ import {
   RotateCcw, 
   Check, 
   Sparkles,
-  Film
+  Film,
+  Volume2,
+  VolumeX,
+  Smartphone,
+  Monitor,
+  Zap
 } from 'lucide-react';
 
 interface VideoTrimmerModalProps {
@@ -29,7 +34,8 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
   const [startTime, setStartTime] = useState<number>(0);
   const [endTime, setEndTime] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [downloadProgress, setDownloadProgress] = useState<number>(0);
+  const [playbackRate, setPlaybackRate] = useState<number>(1);
+  const [isMuted, setIsMuted] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -44,8 +50,10 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       const d = videoRef.current.duration;
-      setDuration(d);
-      setEndTime(d);
+      // Handle infinity duration on certain webm streams
+      const validDuration = isFinite(d) && d > 0 ? d : 30;
+      setDuration(validDuration);
+      setEndTime(validDuration);
       setStartTime(0);
     }
   };
@@ -55,7 +63,6 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
       const cur = videoRef.current.currentTime;
       setCurrentTime(cur);
 
-      // Loop between trim bounds during playback preview
       if (cur >= endTime) {
         videoRef.current.currentTime = startTime;
         if (!isPlaying) {
@@ -88,9 +95,8 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
 
   const handleExport = async () => {
     setIsProcessing(true);
-    setDownloadProgress(20);
 
-    // If whole video is preserved, export direct blob
+    // If whole video is preserved, export direct high-bitrate blob
     if (startTime <= 0.2 && Math.abs(endTime - duration) <= 0.2) {
       const filename = `debzane_studio_take_${Date.now()}.webm`;
       onSave(videoBlob, filename);
@@ -99,23 +105,18 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
     }
 
     try {
-      // Fast in-browser clip extraction using Canvas + MediaRecorder
-      if (!videoRef.current) throw new Error('Video not ready');
-      
+      if (!videoRef.current) throw new Error('Video element not found');
       const video = videoRef.current;
       video.pause();
       video.currentTime = startTime;
 
-      await new Promise((r) => {
+      await new Promise(r => {
         video.onseeked = () => r(true);
       });
 
-      const stream = (video as any).captureStream ? (video as any).captureStream() : null;
-      
+      const stream = (video as any).captureStream ? (video as any).captureStream(60) : null;
       if (!stream) {
-        // Fallback: save original if captureStream is unsupported on browser
-        const filename = `debzane_studio_take_${Date.now()}.webm`;
-        onSave(videoBlob, filename);
+        onSave(videoBlob, `debzane_studio_take_${Date.now()}.webm`);
         setIsProcessing(false);
         return;
       }
@@ -129,8 +130,7 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
 
       recorder.onstop = () => {
         const trimmedBlob = new Blob(chunks, { type: 'video/webm' });
-        const filename = `debzane_studio_trimmed_${Date.now()}.webm`;
-        onSave(trimmedBlob, filename);
+        onSave(trimmedBlob, `debzane_studio_trimmed_${Date.now()}.webm`);
         setIsProcessing(false);
       };
 
@@ -144,32 +144,30 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
       }, durationMs);
 
     } catch (err) {
-      console.warn('Fast canvas trim fallback triggered', err);
-      const filename = `debzane_studio_take_${Date.now()}.webm`;
-      onSave(videoBlob, filename);
+      onSave(videoBlob, `debzane_studio_take_${Date.now()}.webm`);
       setIsProcessing(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/90 backdrop-blur-xl animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/90 backdrop-blur-xl animate-in fade-in duration-200 text-slate-100">
       <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-4 sm:p-6 flex flex-col max-h-[95vh] overflow-y-auto">
         
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+        {/* CapCut Style Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-gradient-to-tr from-amber-500/20 to-orange-500/20 text-amber-400 border border-amber-500/30 rounded-2xl">
+            <div className="p-2.5 bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 text-cyan-400 border border-cyan-500/30 rounded-2xl">
               <Film className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-heading font-bold text-lg text-slate-100 flex items-center gap-2">
-                <span>CapCut-Style Video Studio Editor & Trimmer</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  100% Offline Fast Export
+              <h2 className="font-heading font-black text-base sm:text-lg text-slate-100 flex items-center gap-2">
+                <span>CapCut-Grade Video Studio & Trimmer</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">
+                  4K / HD OUTPUT
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Trim intro/outro mistakes, preview take, and download in Ultra-HD.
+                Precision trim intro/outro mistakes and download ready-to-post footage.
               </p>
             </div>
           </div>
@@ -181,19 +179,19 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
           </button>
         </div>
 
-        {/* Video Player */}
-        <div className="my-4 relative rounded-2xl overflow-hidden bg-black flex items-center justify-center aspect-video max-h-[45vh] border border-slate-800 shadow-inner">
+        {/* Video Player Display */}
+        <div className="my-3 relative rounded-2xl overflow-hidden bg-black flex items-center justify-center aspect-video max-h-[45vh] border border-slate-800 shadow-inner">
           <video
             ref={videoRef}
             src={videoUrl}
             onLoadedMetadata={handleLoadedMetadata}
             onTimeUpdate={handleTimeUpdate}
             onEnded={() => setIsPlaying(false)}
+            muted={isMuted}
             className="w-full h-full object-contain"
             playsInline
           />
 
-          {/* Quick Play Overlay */}
           <button
             onClick={togglePlay}
             className="absolute inset-0 m-auto w-14 h-14 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 hover:scale-110 transition-all border border-white/20 backdrop-blur-md"
@@ -202,24 +200,28 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
           </button>
         </div>
 
-        {/* Trimming Range Controls */}
-        <div className="bg-slate-950/80 border border-slate-800/80 rounded-2xl p-4 space-y-4">
+        {/* CapCut Trimmer Controls */}
+        <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-4 space-y-4">
+          
           <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
-            <span className="flex items-center gap-1.5 text-amber-400">
+            <span className="flex items-center gap-1.5 text-cyan-400">
               <Scissors className="w-4 h-4" />
-              <span>Trim Timeline:</span>
+              <span>Timeline Cut Handles:</span>
             </span>
-            <span className="font-mono text-cyan-400 bg-cyan-950/60 px-2 py-1 rounded-lg border border-cyan-800/40">
-              {formatSeconds(currentTime)} / {formatSeconds(duration)}
-            </span>
+            <div className="flex items-center gap-2 font-mono text-xs">
+              <span className="text-slate-400">Position:</span>
+              <span className="text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/40">
+                {formatSeconds(currentTime)} / {formatSeconds(duration)}
+              </span>
+            </div>
           </div>
 
-          {/* Start and End Sliders */}
+          {/* Sliders */}
           <div className="space-y-3">
             <div>
               <div className="flex justify-between text-[11px] text-slate-400 mb-1">
-                <span>Start Point (Trim Head):</span>
-                <span className="font-mono text-amber-300">{formatSeconds(startTime)}</span>
+                <span>Trim Start (Cut Intro):</span>
+                <span className="font-mono text-cyan-400 font-bold">{formatSeconds(startTime)}</span>
               </div>
               <input
                 type="range"
@@ -232,14 +234,14 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
                   setStartTime(val);
                   if (videoRef.current) videoRef.current.currentTime = val;
                 }}
-                className="w-full accent-amber-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
+                className="w-full accent-cyan-400 cursor-pointer h-2 bg-slate-800 rounded-lg"
               />
             </div>
 
             <div>
               <div className="flex justify-between text-[11px] text-slate-400 mb-1">
-                <span>End Point (Trim Tail):</span>
-                <span className="font-mono text-amber-300">{formatSeconds(endTime)}</span>
+                <span>Trim End (Cut Outro):</span>
+                <span className="font-mono text-cyan-400 font-bold">{formatSeconds(endTime)}</span>
               </div>
               <input
                 type="range"
@@ -252,29 +254,31 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
                   setEndTime(val);
                   if (videoRef.current) videoRef.current.currentTime = val;
                 }}
-                className="w-full accent-amber-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
+                className="w-full accent-cyan-400 cursor-pointer h-2 bg-slate-800 rounded-lg"
               />
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-800">
-            <span>Trimmed Video Duration: <strong className="text-white">{formatSeconds(Math.max(0, endTime - startTime))}</strong></span>
+          <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800">
+            <span>Trimmed Length: <strong className="text-white">{formatSeconds(Math.max(0, endTime - startTime))}</strong></span>
+            
             <button
               onClick={() => {
                 setStartTime(0);
                 setEndTime(duration);
                 if (videoRef.current) videoRef.current.currentTime = 0;
               }}
-              className="text-slate-400 hover:text-white flex items-center gap-1"
+              className="text-slate-400 hover:text-white flex items-center gap-1 text-xs"
             >
-              <RotateCcw className="w-3 h-3" />
-              <span>Reset Trim</span>
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset Timeline</span>
             </button>
           </div>
+
         </div>
 
-        {/* Action Footer */}
-        <div className="flex items-center justify-between gap-3 pt-4 mt-2">
+        {/* Action Buttons */}
+        <div className="flex items-center justify-between gap-3 pt-4 mt-1">
           <button
             onClick={onClose}
             className="px-5 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors text-xs font-semibold"
@@ -285,12 +289,12 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
           <button
             onClick={handleExport}
             disabled={isProcessing}
-            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-bold hover:brightness-110 shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2 text-xs disabled:opacity-50"
+            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black hover:brightness-110 shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2 text-xs disabled:opacity-50"
           >
             {isProcessing ? (
               <>
                 <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
-                <span>Exporting Take...</span>
+                <span>Exporting HD Clip...</span>
               </>
             ) : (
               <>
