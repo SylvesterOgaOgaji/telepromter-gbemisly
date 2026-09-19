@@ -20,7 +20,8 @@ import {
   Italic,
   Highlighter,
   List,
-  Sparkle
+  Sparkle,
+  Radio
 } from 'lucide-react';
 
 interface ScriptEditorProps {
@@ -32,6 +33,7 @@ interface ScriptEditorProps {
   onDeleteScript: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   onLaunchPrompter: () => void;
+  onLaunchStudio: () => void;
   onOpenOwnerProfile: () => void;
 }
 
@@ -50,6 +52,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   onDeleteScript,
   onToggleFavorite,
   onLaunchPrompter,
+  onLaunchStudio,
   onOpenOwnerProfile
 }) => {
   const [title, setTitle] = useState(activeScript?.title || '');
@@ -540,6 +543,14 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                   title="Export as .txt"
                 >
                   <Download className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={onLaunchStudio}
+                  className="flex items-center gap-1.5 px-3.5 py-2 sm:py-2.5 font-heading font-extrabold text-white bg-gradient-to-r from-red-600 via-rose-600 to-red-700 hover:from-red-500 hover:to-rose-500 rounded-xl shadow-lg shadow-red-600/30 transition-all transform active:scale-95 text-xs sm:text-sm border border-red-400/40"
+                  title="Open Split-Screen Video Studio, YouTube Reactions, and HD Camera Recorder"
+                >
+                  <Radio className="w-4 h-4 text-white animate-pulse" />
+                  <span className="tracking-wide">RECORD VIDEO / STUDIO</span>
                 </button>
                 <button
                   onClick={onLaunchPrompter}

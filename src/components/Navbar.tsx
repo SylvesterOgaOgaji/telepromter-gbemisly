@@ -13,7 +13,8 @@ import {
   Globe,
   Activity,
   Linkedin,
-  Facebook
+  Facebook,
+  Radio
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -21,13 +22,15 @@ interface NavbarProps {
   onOpenFeedback: () => void;
   onOpenSettings: () => void;
   onOpenOwnerProfile: () => void;
+  onOpenStudio: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenDonate,
   onOpenFeedback,
   onOpenSettings,
-  onOpenOwnerProfile
+  onOpenOwnerProfile,
+  onOpenStudio
 }) => {
   const [copied, setCopied] = useState(false);
 
@@ -141,6 +144,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             title="Share Teleprompter"
           >
             {copied ? <Check className="w-4 h-4 text-amber-400" /> : <Share2 className="w-4 h-4" />}
+          </button>
+
+          {/* Studio & Reaction Video Button */}
+          <button
+            onClick={onOpenStudio}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 rounded-xl shadow-md shadow-red-600/30 transition-all transform active:scale-95 border border-red-400/30 animate-pulse"
+            title="Open Split-Screen Video Studio & Reaction Recorder"
+          >
+            <Radio className="w-3.5 h-3.5 text-white" />
+            <span>Studio / Video</span>
           </button>
 
           {/* User Feedback / Comments */}

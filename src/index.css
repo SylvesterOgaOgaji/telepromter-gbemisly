@@ -66,3 +66,39 @@ body {
 .prompter-mirror-both {
   transform: scale(-1, -1);
 }
+
+/* CNN News Ticker Animation */
+@keyframes tickerAnimation {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.animate-ticker {
+  display: inline-block;
+  white-space: nowrap;
+  animation: tickerAnimation 22s linear infinite;
+}
+
+/* Floating Emoji / Balloon Animation */
+@keyframes floatUp {
+  0% {
+    transform: translateY(0) scale(0.7);
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.9;
+    transform: translateY(-220px) scale(1.2);
+  }
+  100% {
+    transform: translateY(-350px) scale(1.4);
+    opacity: 0;
+  }
+}
+
+.animate-float-up {
+  animation: floatUp 2.8s ease-out forwards;
+}

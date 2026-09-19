@@ -6,6 +6,8 @@ import { DonateModal } from './components/DonateModal';
 import { FeedbackModal } from './components/FeedbackModal';
 import { SettingsModal } from './components/SettingsModal';
 import { OwnerModal } from './components/OwnerModal';
+import { StudioModal } from './components/StudioModal';
+import { VideoTrimmerModal } from './components/VideoTrimmerModal';
 import { useScriptStorage } from './hooks/useScriptStorage';
 import { useSettings } from './hooks/useSettings';
 import { 
@@ -19,7 +21,8 @@ import {
   Youtube,
   Instagram,
   Activity,
-  ExternalLink
+  ExternalLink,
+  Radio
 } from 'lucide-react';
 
 import { InstallPrompt } from './components/InstallPrompt';
@@ -43,11 +46,22 @@ export function App() {
   } = useSettings();
 
   const [isPrompterActive, setIsPrompterActive] = useState(false);
+  const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [trimmerBlob, setTrimmerBlob] = useState<Blob | null>(null);
   const [isDonateOpen, setIsDonateOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isOwnerModalOpen, setIsOwnerModalOpen] = useState(false);
   const [isDonateReminder, setIsDonateReminder] = useState(false);
+
+  // Register Offline PWA Service Worker
+  React.useEffect(() => {
+    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.log('SW registration notice:', err);
+      });
+    }
+  }, []);
 
   // Track session usage count to show gentle donation reminder
   const handleLaunchPrompter = () => {
@@ -89,6 +103,7 @@ export function App() {
             onOpenFeedback={() => setIsFeedbackOpen(true)}
             onOpenSettings={() => setIsSettingsOpen(true)}
             onOpenOwnerProfile={() => setIsOwnerModalOpen(true)}
+            onOpenStudio={() => setIsStudioOpen(true)}
           />
 
           {/* Main Content Area */}
@@ -128,6 +143,14 @@ export function App() {
                 </div>
 
                 <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                  <button
+                    onClick={() => setIsStudioOpen(true)}
+                    className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 border border-red-400/40 rounded-xl transition-all shadow-md shadow-red-600/30"
+                  >
+                    <Radio className="w-3.5 h-3.5 text-white animate-pulse" />
+                    <span>Split Studio</span>
+                  </button>
+
                   <a
                     href="https://youtube.com/@debzane_concepts"
                     target="_blank"
@@ -170,6 +193,7 @@ export function App() {
               onDeleteScript={deleteScript}
               onToggleFavorite={toggleFavorite}
               onLaunchPrompter={handleLaunchPrompter}
+              onLaunchStudio={() => setIsStudioOpen(true)}
               onOpenOwnerProfile={() => setIsOwnerModalOpen(true)}
             />
           </main>
@@ -227,6 +251,38 @@ export function App() {
 
       {/* PWA Install Invite Prompt */}
       <InstallPrompt />
+
+      {/* Dual-Studio Video & Reaction Recording Suite Modal */}
+      {activeScript && (
+        <StudioModal
+          isOpen={isStudioOpen}
+          onClose={() => setIsStudioOpen(false)}
+          script={activeScript}
+          settings={settings}
+          onUpdateSetting={updateSetting}
+          onOpenTrimmer={(blob) => {
+            setIsStudioOpen(false);
+            setTrimmerBlob(blob);
+          }}
+        />
+      )}
+
+      {/* CapCut-Style Video Trimmer & Exporter Modal */}
+      {trimmerBlob && (
+        <VideoTrimmerModal
+          videoBlob={trimmerBlob}
+          onClose={() => setTrimmerBlob(null)}
+          onSave={(trimmedBlob, filename) => {
+            const url = URL.createObjectURL(trimmedBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+            setTrimmerBlob(null);
+          }}
+        />
+      )}
 
       {/* Owner Profile & Bio Modal */}
       <OwnerModal

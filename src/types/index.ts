@@ -52,3 +52,19 @@ export interface FeedbackComment {
   date: string;
   country?: string;
 }
+
+export type VideoFilter = 'none' | 'beauty' | 'cinematic' | 'matrix' | 'monochrome' | 'vibrant' | 'sepia';
+
+export interface StudioOverlayConfig {
+  showTicker: boolean;
+  tickerText: string;
+  tickerSpeed: number; // 1 to 5
+  tickerBgColor: string;
+  tickerTextColor: string;
+  showLogo: boolean;
+  logoUrl: string;
+  logoPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  filter: VideoFilter;
+  layout: 'split-h' | 'split-v' | 'pip' | 'prompter-only';
+  mediaSwapped: boolean;
+}
