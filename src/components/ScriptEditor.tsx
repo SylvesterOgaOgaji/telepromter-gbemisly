@@ -521,7 +521,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                 />
               </div>
 
-              <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                 <button
                   onClick={handlePasteText}
                   className="flex items-center gap-1 px-2.5 sm:px-3 py-2 text-xs font-semibold text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl transition-all"
@@ -532,29 +532,30 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                 </button>
                 <button
                   onClick={handleCopyText}
-                  className="p-2 sm:p-2.5 text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl transition-colors"
+                  className="p-2 text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl transition-colors"
                   title="Copy script text"
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-amber-400" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
                 <button
                   onClick={handleExportText}
-                  className="p-2 sm:p-2.5 text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl transition-colors"
+                  className="p-2 text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl transition-colors"
                   title="Export as .txt"
                 >
                   <Download className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={onLaunchStudio}
-                  className="flex items-center gap-1.5 px-3.5 py-2 sm:py-2.5 font-heading font-extrabold text-white bg-gradient-to-r from-red-600 via-rose-600 to-red-700 hover:from-red-500 hover:to-rose-500 rounded-xl shadow-lg shadow-red-600/30 transition-all transform active:scale-95 text-xs sm:text-sm border border-red-400/40"
-                  title="Open Split-Screen Video Studio, YouTube Reactions, and HD Camera Recorder"
+                  className="flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 font-heading font-extrabold text-white bg-gradient-to-r from-red-600 via-rose-600 to-red-700 hover:from-red-500 hover:to-rose-500 rounded-xl shadow-lg shadow-red-600/25 transition-all transform active:scale-95 text-xs sm:text-sm border border-red-400/30"
+                  title="Open Split Studio & HD Video Recorder"
                 >
                   <Radio className="w-4 h-4 text-white animate-pulse" />
-                  <span className="tracking-wide">RECORD VIDEO / STUDIO</span>
+                  <span className="tracking-wide">RECORD STUDIO</span>
                 </button>
                 <button
                   onClick={onLaunchPrompter}
-                  className="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 font-heading font-extrabold text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-debzane-blue-400 hover:from-amber-300 hover:to-debzane-blue-300 rounded-xl shadow-lg shadow-amber-500/20 transition-all transform active:scale-95 text-xs sm:text-sm"
+                  className="flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 font-heading font-extrabold text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-debzane-blue-400 hover:from-amber-300 hover:to-debzane-blue-300 rounded-xl shadow-lg shadow-amber-500/20 transition-all transform active:scale-95 text-xs sm:text-sm"
+                  title="Start Full-Screen Teleprompter Scroll"
                 >
                   <Play className="w-4 h-4 fill-slate-950" />
                   <span className="tracking-wide">START PROMPTER</span>

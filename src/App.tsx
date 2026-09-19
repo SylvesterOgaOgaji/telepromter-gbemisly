@@ -199,48 +199,99 @@ export function App() {
           </main>
 
           {/* Footer */}
-          <footer className="border-t border-slate-900 bg-[#02060f] py-6 text-slate-500 text-xs mt-8">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => setIsOwnerModalOpen(true)}
-                  className="font-bold text-slate-300 hover:text-amber-300 transition-colors flex items-center gap-1.5"
-                >
-                  <img src="/debzane-logo.jpg" alt="Debzane" className="w-4 h-4 rounded-full" />
-                  <span>Debzane Concepts</span>
-                </button>
-                <span>•</span>
-                <span>Created by Sylvester Oga Ogaji</span>
-                <span>•</span>
-                <span className="text-debzane-blue-400">JV ImpactVR Initiative LTD/GTE</span>
+          <footer className="border-t border-slate-900 bg-[#02060f] py-8 text-slate-500 text-xs mt-12">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pb-6 border-b border-slate-900 items-start">
+                
+                {/* Brand & Organization */}
+                <div className="space-y-2">
+                  <div 
+                    onClick={() => setIsOwnerModalOpen(true)}
+                    className="cursor-pointer flex items-center gap-2 group inline-flex"
+                  >
+                    <img src="/debzane-logo.jpg" alt="Debzane" className="w-6 h-6 rounded-full border border-amber-400/60" />
+                    <span className="font-heading font-bold text-slate-200 group-hover:text-amber-300 transition-colors text-sm">
+                      Debzane Concept Teleprompter
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    A 100% free, unlimited, studio-grade video teleprompter created by <strong>Sylvester Oga Ogaji</strong> in strategic partnership with <strong className="text-debzane-blue-300">JV ImpactVR Initiative LTD/GTE</strong>.
+                  </p>
+                </div>
+
+                {/* Founder Channels & Wellness */}
+                <div className="space-y-2">
+                  <h4 className="text-[11px] uppercase font-bold tracking-wider text-slate-400">Founder & Programs</h4>
+                  <div className="flex flex-col gap-1.5 text-[11px]">
+                    <a
+                      href="https://debzane-wellness-coach.lovable.app"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-amber-400 hover:text-amber-300 flex items-center gap-1.5 font-medium"
+                    >
+                      <Activity className="w-3.5 h-3.5" />
+                      <span>Fresh & Fit Wellness Portal</span>
+                      <ExternalLink className="w-3 h-3 ml-auto opacity-70" />
+                    </a>
+                    <a
+                      href="https://www.facebook.com/gbemisola.akinlade/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-slate-400 hover:text-blue-400 flex items-center gap-1.5"
+                    >
+                      <span>Facebook: Oluwagbemisola J. Akinlade-Ogaji</span>
+                    </a>
+                    <a
+                      href="https://www.linkedin.com/in/oluwagbemisola-j-akinlade-ogaji/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-slate-400 hover:text-debzane-blue-400 flex items-center gap-1.5"
+                    >
+                      <span>LinkedIn Profile</span>
+                    </a>
+                  </div>
+                </div>
+
+                {/* Community & Support Channels */}
+                <div className="space-y-2">
+                  <h4 className="text-[11px] uppercase font-bold tracking-wider text-slate-400">Support & Feedback</h4>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      onClick={() => { setIsDonateReminder(false); setIsDonateOpen(true); }}
+                      className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all"
+                    >
+                      <Heart className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Support Dev (OPay)</span>
+                    </button>
+
+                    <button
+                      onClick={() => setIsFeedbackOpen(true)}
+                      className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 rounded-xl text-xs font-semibold transition-all"
+                    >
+                      Community Reviews
+                    </button>
+
+                    <a
+                      href="https://youtube.com/@debzane_concepts"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all"
+                    >
+                      <Youtube className="w-3.5 h-3.5" />
+                      <span>YouTube</span>
+                    </a>
+                  </div>
+                </div>
+
               </div>
 
-              <div className="flex items-center gap-4 text-slate-400">
-                <a 
-                  href="https://youtube.com/@debzane_concepts" 
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="hover:text-red-400 transition-colors flex items-center gap-1"
-                >
-                  <Youtube className="w-3.5 h-3.5" />
-                  <span>YouTube Reviews</span>
-                </a>
-                <a 
-                  href="https://debzane-wellness-coach.lovable.app" 
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="hover:text-amber-300 transition-colors flex items-center gap-1"
-                >
-                  <span>Fresh & Fit</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-                <button onClick={() => { setIsDonateReminder(false); setIsDonateOpen(true); }} className="hover:text-amber-400 transition-colors">
-                  Donate (OPay)
-                </button>
-                <button onClick={() => setIsFeedbackOpen(true)} className="hover:text-debzane-blue-400 transition-colors">
-                  Reviews
-                </button>
+              {/* Bottom Copyright & Disclaimer */}
+              <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-600">
+                <span>© 2026 Debzane Concepts & JV ImpactVR Initiative LTD/GTE. All rights reserved.</span>
+                <span>Unlimited Multi-Page Prompter • 100% Offline Compatible</span>
               </div>
+
             </div>
           </footer>
         </>

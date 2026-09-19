@@ -1,37 +1,26 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Script, PrompterSettings, VideoFilter, StudioOverlayConfig } from '../types';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { 
-  Video, 
-  VideoOff, 
-  Mic, 
-  MicOff, 
+  Radio, 
   Play, 
   Pause, 
-  RotateCcw, 
   X, 
   Youtube, 
   Upload, 
   Sparkles, 
-  Layers, 
-  Radio, 
-  Sliders, 
   Square, 
-  Download, 
-  Smile, 
-  Flame, 
-  Heart, 
-  ThumbsUp, 
-  PartyPopper,
-  FlipHorizontal,
-  LayoutGrid,
-  Columns,
-  Rows,
-  Image as ImageIcon,
-  Check,
-  ChevronRight,
-  RefreshCw,
-  Film
+  RefreshCw, 
+  Smartphone, 
+  Monitor, 
+  Sun, 
+  Edit3, 
+  HelpCircle, 
+  Sliders, 
+  Check, 
+  ChevronDown, 
+  ChevronUp, 
+  Layers
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -58,8 +47,13 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   onUpdateSetting,
   onOpenTrimmer
 }) => {
-  // Wake lock to keep screen active
   useWakeLock(isOpen);
+
+  // Script text and quick inline editing inside Studio
+  const [scriptTitle, setScriptTitle] = useState(script.title);
+  const [scriptContent, setScriptContent] = useState(script.content);
+  const [showScriptDrawer, setShowScriptDrawer] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   // Studio Media Reference state
   const [mediaSourceType, setMediaSourceType] = useState<'none' | 'youtube' | 'file'>('none');
@@ -68,11 +62,11 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [localMediaUrl, setLocalMediaUrl] = useState<string>('');
   const [localMediaType, setLocalMediaType] = useState<'video' | 'audio'>('video');
 
-  // Camera & Audio State
-  const [cameraActive, setCameraActive] = useState<boolean>(true);
-  const [micActive, setMicActive] = useState<boolean>(true);
+  // Camera, Lighting & Orientation State
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('landscape');
+  const [lightingBrightness, setLightingBrightness] = useState<number>(100); // 70 to 150%
 
   // Live Scrolling Prompter inside Studio
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -81,9 +75,9 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   // Overlay & Filter Configuration
   const [overlayConfig, setOverlayConfig] = useState<StudioOverlayConfig>({
     showTicker: true,
-    tickerText: 'BREAKING: Debzane Concept Teleprompter Studio • For Bookings & Coaching Call: 08057961025 • High-Definition Studio Broadcast',
+    tickerText: 'BREAKING: Debzane Concept Teleprompter Studio • For Bookings & Health Coaching Call: 08057961025',
     tickerSpeed: 3,
-    tickerBgColor: '#dc2626', // Red breaking news
+    tickerBgColor: '#dc2626',
     tickerTextColor: '#ffffff',
     showLogo: true,
     logoUrl: '/debzane-logo.jpg',
@@ -93,9 +87,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     mediaSwapped: false
   });
 
-  // Floating reaction animations
   const [floatingEmojis, setFloatingEmojis] = useState<FloatingEmoji[]>([]);
-  const [showSettingsTab, setShowSettingsTab] = useState<'overlays' | 'media' | 'prompter' | 'filters' | null>(null);
 
   // References
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
@@ -107,6 +99,11 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const animFrameRef = useRef<number | null>(null);
   const lastScrollTimeRef = useRef<number>(0);
   const recordingTimerRef = useRef<any>(null);
+
+  useEffect(() => {
+    setScriptTitle(script.title);
+    setScriptContent(script.content);
+  }, [script.id, script.title, script.content]);
 
   // Parse YouTube URL to Embed ID
   const parseYoutubeUrl = (url: string) => {
@@ -140,7 +137,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     setMediaSourceType('file');
   };
 
-  // Initialize Camera & Microphone with Studio Ultra-HD constraints
+  // Start Camera with adaptive constraints based on Orientation
   const startCamera = async () => {
     try {
       if (mediaStreamRef.current) {
@@ -148,8 +145,8 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          width: orientation === 'portrait' ? { ideal: 1080 } : { ideal: 1920 },
+          height: orientation === 'portrait' ? { ideal: 1920 } : { ideal: 1080 },
           facingMode: 'user'
         },
         audio: {
@@ -162,11 +159,8 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       if (videoPreviewRef.current) {
         videoPreviewRef.current.srcObject = stream;
       }
-      setCameraActive(true);
-      setMicActive(true);
     } catch (err) {
-      console.warn('Camera/Mic access error:', err);
-      setCameraActive(false);
+      console.warn('Camera access error:', err);
     }
   };
 
@@ -178,7 +172,6 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     if (videoPreviewRef.current) {
       videoPreviewRef.current.srcObject = null;
     }
-    setCameraActive(false);
   };
 
   useEffect(() => {
@@ -191,24 +184,20 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     return () => {
       stopCamera();
     };
-  }, [isOpen]);
+  }, [isOpen, orientation]);
 
-  // Master Play / Pause for Teleprompter + Reference Media
+  // Master Play / Pause for Teleprompter & Media
   const togglePlay = () => {
     const nextState = !isPlaying;
     setIsPlaying(nextState);
 
-    // Sync local video/audio if loaded
     if (localVideoElemRef.current) {
-      if (nextState) {
-        localVideoElemRef.current.play().catch(() => {});
-      } else {
-        localVideoElemRef.current.pause();
-      }
+      if (nextState) localVideoElemRef.current.play().catch(() => {});
+      else localVideoElemRef.current.pause();
     }
   };
 
-  // Start / Stop Recording
+  // Recording Controls
   const startRecording = () => {
     if (!mediaStreamRef.current) return;
     recordedChunksRef.current = [];
@@ -221,7 +210,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     try {
       const recorder = new MediaRecorder(mediaStreamRef.current, {
         mimeType,
-        videoBitsPerSecond: 4000000 // High 4Mbps quality
+        videoBitsPerSecond: 4000000
       });
 
       recorder.ondataavailable = (e) => {
@@ -240,7 +229,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       setIsRecording(true);
       setRecordingSeconds(0);
 
-      // Auto start prompter scroll when recording begins
+      // Auto start prompter scroll
       setIsPlaying(true);
       if (localVideoElemRef.current) localVideoElemRef.current.play().catch(() => {});
 
@@ -262,12 +251,12 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     if (localVideoElemRef.current) localVideoElemRef.current.pause();
   };
 
-  // Floating Reaction Trigger
+  // Reactions
   const triggerEmoji = (emoji: string) => {
     const newEmoji: FloatingEmoji = {
       id: Date.now() + Math.random(),
       emoji,
-      left: 15 + Math.random() * 70 // randomized horizontal position percentage
+      left: 15 + Math.random() * 70
     };
     setFloatingEmojis(prev => [...prev.slice(-15), newEmoji]);
 
@@ -275,13 +264,12 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       confetti({ particleCount: 40, spread: 60, origin: { y: 0.8 } });
     }
 
-    // Auto remove after 3s animation
     setTimeout(() => {
       setFloatingEmojis(prev => prev.filter(e => e.id !== newEmoji.id));
     }, 3000);
   };
 
-  // Ultra-Smooth Prompter Animation Frame Loop
+  // Prompter Scroll loop
   useEffect(() => {
     const scrollElem = prompterScrollRef.current;
     if (!scrollElem) return;
@@ -317,17 +305,17 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const getFilterStyle = (filter: VideoFilter) => {
     switch (filter) {
       case 'beauty':
-        return 'contrast-[1.08] brightness-[1.12] saturate-[1.15] blur-[0.3px]';
+        return 'contrast-[1.08] saturate-[1.15] blur-[0.25px]';
       case 'cinematic':
-        return 'contrast-[1.2] brightness-[0.95] saturate-[1.25] hue-rotate-[-8deg]';
+        return 'contrast-[1.22] saturate-[1.25] hue-rotate-[-6deg]';
       case 'matrix':
-        return 'contrast-[1.3] brightness-[1.1] hue-rotate-[90deg] saturate-[1.8]';
+        return 'contrast-[1.3] hue-rotate-[90deg] saturate-[1.8]';
       case 'monochrome':
-        return 'grayscale contrast-[1.25] brightness-[1.05]';
+        return 'grayscale contrast-[1.25]';
       case 'vibrant':
         return 'saturate-[1.6] contrast-[1.15]';
       case 'sepia':
-        return 'sepia contrast-[1.1] brightness-[0.95]';
+        return 'sepia contrast-[1.1]';
       default:
         return '';
     }
@@ -342,68 +330,107 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   return (
     <div className="fixed inset-0 z-[80] bg-slate-950 flex flex-col select-none overflow-hidden animate-in fade-in duration-200">
       
-      {/* Studio Master Header */}
-      <header className="h-16 px-4 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between z-30 backdrop-blur-md">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-red-500 to-rose-600 text-white rounded-xl shadow-lg shadow-red-500/20 flex items-center justify-center">
-            <Radio className="w-5 h-5 animate-pulse" />
+      {/* Studio Header */}
+      <header className="h-14 sm:h-16 px-3 sm:px-4 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between z-30 backdrop-blur-md">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="p-2 bg-gradient-to-br from-red-600 to-rose-600 text-white rounded-xl shadow-md flex items-center justify-center">
+            <Radio className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-heading font-black text-sm sm:text-base text-slate-100 tracking-wide">
-                DEBZANE DUAL-STUDIO & REACTION SUITE
-              </h1>
-              <span className="hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                100% OFFLINE READY
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400">
-              Record live split-screen reactions with synchronized prompter and CNN ticker
+            <h1 className="font-heading font-black text-xs sm:text-sm text-slate-100 tracking-wide">
+              DEBZANE DUAL-STUDIO
+            </h1>
+            <p className="text-[10px] text-slate-400 truncate max-w-[160px] sm:max-w-none">
+              Script: <span className="text-amber-300 font-semibold">{scriptTitle || 'Untitled Script'}</span>
             </p>
           </div>
         </div>
 
-        {/* Master Control Action Bar */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Live Recording HUD */}
-          {isRecording ? (
-            <div className="flex items-center gap-2 bg-red-950/80 border border-red-500/60 px-3 py-1.5 rounded-xl animate-pulse">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <span className="font-mono font-bold text-red-300 text-xs sm:text-sm">
-                REC {formatTimer(recordingSeconds)}
-              </span>
-              <button
-                onClick={stopRecording}
-                className="ml-2 px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-all shadow-md"
-              >
-                STOP
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={startRecording}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-red-600/30 flex items-center gap-2 transition-all transform active:scale-95"
-            >
-              <div className="w-2.5 h-2.5 rounded-full bg-white animate-ping"></div>
-              <span>START RECORDING</span>
-            </button>
-          )}
+        {/* Top Controls & Instructions */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          
+          {/* Quick Edit Script Button */}
+          <button
+            onClick={() => setShowScriptDrawer(!showScriptDrawer)}
+            className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all ${
+              showScriptDrawer ? 'bg-amber-400 text-slate-950 border-amber-300' : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+            }`}
+            title="Edit script text directly"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">Edit Text</span>
+          </button>
 
-          {/* Quick Close Button */}
+          {/* Orientation Toggle */}
+          <button
+            onClick={() => setOrientation(orientation === 'portrait' ? 'landscape' : 'portrait')}
+            className="p-1.5 sm:p-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 transition-colors"
+            title={`Switch to ${orientation === 'portrait' ? 'Landscape (16:9)' : 'Portrait (9:16 for TikTok/Shorts)'}`}
+          >
+            {orientation === 'portrait' ? <Smartphone className="w-4 h-4 text-amber-400" /> : <Monitor className="w-4 h-4 text-cyan-400" />}
+          </button>
+
+          {/* Help Instructions Toggle */}
+          <button
+            onClick={() => setShowInstructions(!showInstructions)}
+            className="p-1.5 sm:p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+            title="Studio Instructions"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
+
+          {/* Close Studio */}
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+            className="p-1.5 sm:p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+            title="Close Studio"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
       </header>
 
+      {/* Interactive Instructions Dropdown */}
+      {showInstructions && (
+        <div className="bg-slate-900 border-b border-amber-500/30 p-3 sm:p-4 text-xs text-slate-300 z-40 animate-in slide-in-from-top-2">
+          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+            <div className="space-y-1">
+              <strong className="text-amber-300 font-bold">🎬 Quick Studio Instructions:</strong>
+              <p className="text-[11px] text-slate-400">
+                1. <strong>Edit Text</strong> to change your script words on the fly. 2. <strong>Load Reaction Video</strong> on the left (YouTube link or offline file). 3. Hit the big red <strong>RECORD</strong> button at the bottom. When you finish, you can trim off intro/outro pauses and download in HD.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowInstructions(false)}
+              className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs self-end sm:self-center font-bold"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Inline Script Drawer for Mobile/Tablet */}
+      {showScriptDrawer && (
+        <div className="bg-slate-900/98 border-b border-slate-700 p-3 z-40 flex flex-col gap-2 max-h-[35vh] overflow-y-auto">
+          <div className="flex items-center justify-between text-xs text-slate-400">
+            <span className="font-bold text-amber-300">Live Script Editor:</span>
+            <span>Changes reflect immediately in the prompter</span>
+          </div>
+          <textarea
+            value={scriptContent}
+            onChange={(e) => setScriptContent(e.target.value)}
+            placeholder="Type your script here..."
+            className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 resize-none h-24 font-reading"
+          />
+        </div>
+      )}
+
       {/* Main Studio Viewport (Split Stage) */}
-      <main className="flex-1 relative flex flex-col md:flex-row overflow-hidden bg-black">
+      <main className={`flex-1 relative flex overflow-hidden bg-black ${orientation === 'portrait' ? 'flex-col' : 'flex-col md:flex-row'}`}>
         
-        {/* LEFT / TOP PANEL (Reference Video or Camera depending on swap) */}
-        <div className={`relative flex-1 bg-slate-950 border-r border-b md:border-b-0 border-slate-800 flex flex-col justify-center items-center overflow-hidden min-h-[40vh] md:min-h-auto ${overlayConfig.mediaSwapped ? 'order-2' : 'order-1'}`}>
+        {/* LEFT / TOP PANEL: Reaction / Reference Media */}
+        <div className={`relative flex-1 bg-slate-950 border-r border-b md:border-b-0 border-slate-800 flex flex-col justify-center items-center overflow-hidden min-h-[35vh] md:min-h-auto ${overlayConfig.mediaSwapped ? 'order-2' : 'order-1'}`}>
           
           {mediaSourceType === 'youtube' && youtubeEmbedId ? (
             <div className="w-full h-full aspect-video flex items-center justify-center bg-black">
@@ -425,54 +452,48 @@ export const StudioModal: React.FC<StudioModalProps> = ({
                   playsInline
                 />
               ) : (
-                <div className="p-8 text-center space-y-4">
-                  <div className="w-20 h-20 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center mx-auto border border-cyan-500/30">
-                    <Radio className="w-10 h-10 animate-bounce" />
+                <div className="p-4 text-center space-y-2">
+                  <div className="w-12 h-12 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center mx-auto border border-cyan-500/30">
+                    <Radio className="w-6 h-6 animate-pulse" />
                   </div>
-                  <h3 className="text-white font-bold text-lg">Audio Track Loaded</h3>
+                  <h3 className="text-white font-bold text-sm">Audio Track Loaded</h3>
                   <audio ref={localVideoElemRef as any} src={localMediaUrl} controls className="mx-auto" />
                 </div>
               )}
             </div>
           ) : (
-            // Default: Empty Reference Video Slot with Import Launcher
-            <div className="p-6 text-center max-w-md space-y-4">
-              <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 flex items-center justify-center mx-auto shadow-inner">
-                <Youtube className="w-8 h-8 text-red-500" />
+            // Default Media Slot
+            <div className="p-4 sm:p-6 text-center max-w-sm space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+                <Youtube className="w-6 h-6 text-red-500" />
               </div>
               <div>
-                <h3 className="text-white font-bold text-base">Load Reaction / Reference Media</h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Paste any YouTube link or upload your own video/audio to react, commentary, or dub side-by-side.
+                <h3 className="text-white font-bold text-sm sm:text-base">Reaction Media Slot</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Paste YouTube link or upload offline video to react side-by-side.
                 </p>
               </div>
 
               {/* YouTube Input Box */}
-              <div className="flex gap-2">
+              <div className="flex gap-1.5">
                 <input
                   type="text"
-                  placeholder="Paste YouTube link here..."
+                  placeholder="Paste YouTube URL..."
                   value={youtubeUrl}
                   onChange={(e) => setYoutubeUrl(e.target.value)}
-                  className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500"
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-red-500"
                 />
                 <button
                   onClick={handleApplyYoutube}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl transition-all"
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl transition-all"
                 >
                   Load
                 </button>
               </div>
 
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-slate-800"></div>
-                <span className="text-[10px] uppercase text-slate-500 font-bold">OR OFFLINE FILE</span>
-                <div className="flex-1 h-px bg-slate-800"></div>
-              </div>
-
-              <label className="inline-flex items-center justify-center gap-2 w-full py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl cursor-pointer transition-all">
-                <Upload className="w-4 h-4 text-cyan-400" />
-                <span>Upload MP4 / MP3 File (100% Offline)</span>
+              <label className="inline-flex items-center justify-center gap-1.5 w-full py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold rounded-xl cursor-pointer transition-all">
+                <Upload className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Upload Local Media (Offline)</span>
                 <input
                   type="file"
                   accept="video/*,audio/*"
@@ -485,11 +506,13 @@ export const StudioModal: React.FC<StudioModalProps> = ({
 
         </div>
 
-        {/* RIGHT / BOTTOM PANEL (Live Ultra-HD Camera + Integrated Scrolling Script) */}
+        {/* RIGHT / BOTTOM PANEL: Live Camera + Scrolling Prompter */}
         <div className={`relative flex-1 bg-slate-950 flex flex-col justify-center items-center overflow-hidden min-h-[45vh] md:min-h-auto ${overlayConfig.mediaSwapped ? 'order-1' : 'order-2'}`}>
           
-          {/* Live Camera Video Engine */}
-          <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
+          <div 
+            className="relative w-full h-full flex items-center justify-center overflow-hidden"
+            style={{ filter: `brightness(${lightingBrightness}%)` }}
+          >
             <video
               ref={videoPreviewRef}
               autoPlay
@@ -498,25 +521,25 @@ export const StudioModal: React.FC<StudioModalProps> = ({
               className={`w-full h-full object-cover transform -scale-x-100 ${getFilterStyle(overlayConfig.filter)}`}
             />
 
-            {/* Custom Brand Logo Watermark Overlay */}
+            {/* Custom Brand Logo */}
             {overlayConfig.showLogo && (
               <div 
-                className={`absolute z-20 p-3 pointer-events-none transition-all ${
-                  overlayConfig.logoPosition === 'top-left' ? 'top-3 left-3' :
-                  overlayConfig.logoPosition === 'top-right' ? 'top-3 right-3' :
-                  overlayConfig.logoPosition === 'bottom-left' ? 'bottom-16 left-3' :
-                  'bottom-16 right-3'
+                className={`absolute z-20 p-2.5 pointer-events-none transition-all ${
+                  overlayConfig.logoPosition === 'top-left' ? 'top-2 left-2' :
+                  overlayConfig.logoPosition === 'top-right' ? 'top-2 right-2' :
+                  overlayConfig.logoPosition === 'bottom-left' ? 'bottom-16 left-2' :
+                  'bottom-16 right-2'
                 }`}
               >
                 <img 
                   src={overlayConfig.logoUrl} 
-                  alt="Debzane Logo Watermark" 
-                  className="h-10 sm:h-12 w-auto object-contain rounded-lg shadow-xl drop-shadow-md border border-white/20 backdrop-blur-sm"
+                  alt="Logo Watermark" 
+                  className="h-8 sm:h-10 w-auto object-contain rounded-lg shadow-xl border border-white/20"
                 />
               </div>
             )}
 
-            {/* Floating Live Reaction Emojis Animation Layer */}
+            {/* Floating Live Reactions */}
             <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
               {floatingEmojis.map(item => (
                 <div
@@ -529,41 +552,39 @@ export const StudioModal: React.FC<StudioModalProps> = ({
               ))}
             </div>
 
-            {/* In-Camera Teleprompter Text Corridor Overlay */}
+            {/* In-Camera Teleprompter Corridor */}
             <div 
               ref={prompterScrollRef}
               onClick={togglePlay}
-              className="absolute inset-0 z-20 overflow-y-scroll scrollbar-none px-6 sm:px-12 py-8 cursor-pointer bg-gradient-to-b from-black/60 via-black/40 to-black/70 backdrop-blur-[1.5px]"
+              className="absolute inset-0 z-20 overflow-y-scroll scrollbar-none px-4 sm:px-10 py-6 cursor-pointer bg-gradient-to-b from-black/60 via-black/35 to-black/70 backdrop-blur-[1px]"
             >
-              {/* Cue focus highlight box */}
-              <div className="sticky top-1/3 left-0 right-0 h-20 border-y border-amber-400/40 bg-amber-400/10 pointer-events-none rounded-lg">
-                <div className="absolute left-2 top-1/2 -translate-y-1/2 text-amber-400 font-bold text-xs">▶ CUE</div>
+              <div className="sticky top-1/3 left-0 right-0 h-16 border-y border-amber-400/40 bg-amber-400/10 pointer-events-none rounded-lg flex items-center px-2">
+                <span className="text-amber-400 font-bold text-[10px]">▶ CUE</span>
               </div>
 
-              <div className="py-24 space-y-6 text-center max-w-xl mx-auto">
-                <h2 className="text-xl sm:text-2xl font-black text-amber-300 drop-shadow-md">
-                  {script.title}
+              <div className="py-20 space-y-4 text-center max-w-lg mx-auto">
+                <h2 className="text-base sm:text-xl font-black text-amber-300 drop-shadow-md">
+                  {scriptTitle || 'Untitled'}
                 </h2>
                 <div 
-                  className="font-bold text-white leading-relaxed drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] whitespace-pre-wrap"
-                  style={{ fontSize: `${Math.max(22, settings.fontSize * 0.65)}px` }}
+                  className="font-bold text-white leading-relaxed drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] whitespace-pre-wrap text-sm sm:text-lg"
                 >
-                  {script.content || 'Paste or write your script in the editor to scroll live here.'}
+                  {scriptContent || 'Click "Edit Text" at the top to write your script.'}
                 </div>
               </div>
             </div>
 
-            {/* CNN-STYLE LIVE BREAKING NEWS SCROLLING TICKER */}
+            {/* CNN LIVE SCROLLING TICKER */}
             {overlayConfig.showTicker && (
               <div 
-                className="absolute bottom-0 left-0 right-0 z-30 h-10 flex items-center shadow-2xl border-t border-black/40 overflow-hidden font-bold tracking-wide select-none"
+                className="absolute bottom-0 left-0 right-0 z-30 h-8 sm:h-9 flex items-center shadow-2xl border-t border-black/40 overflow-hidden font-bold select-none"
                 style={{ backgroundColor: overlayConfig.tickerBgColor, color: overlayConfig.tickerTextColor }}
               >
-                <div className="bg-black text-white px-3 h-full flex items-center text-[10px] sm:text-xs font-black uppercase tracking-wider shrink-0 z-10 shadow-lg">
+                <div className="bg-black text-white px-2.5 h-full flex items-center text-[9px] sm:text-[10px] font-black uppercase tracking-wider shrink-0 z-10 shadow-lg">
                   LIVE NEWS
                 </div>
                 <div className="flex-1 overflow-hidden whitespace-nowrap">
-                  <div className="inline-block animate-ticker text-xs sm:text-sm pl-4">
+                  <div className="inline-block animate-ticker text-xs pl-3">
                     {overlayConfig.tickerText} • {overlayConfig.tickerText}
                   </div>
                 </div>
@@ -576,99 +597,106 @@ export const StudioModal: React.FC<StudioModalProps> = ({
 
       </main>
 
-      {/* Floating Reaction Trigger Bar (Balloons, Thumbs-up, Fire) */}
-      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-40 bg-slate-900/90 border border-slate-700/80 backdrop-blur-xl px-3 py-2 rounded-2xl flex items-center gap-2 shadow-2xl">
-        <button
-          onClick={() => triggerEmoji('🎈')}
-          className="p-2 text-xl hover:scale-125 transition-transform active:scale-95"
-          title="Floating Balloons"
-        >
-          🎈
-        </button>
-        <button
-          onClick={() => triggerEmoji('👍')}
-          className="p-2 text-xl hover:scale-125 transition-transform active:scale-95"
-          title="Thumbs Up"
-        >
-          👍
-        </button>
-        <button
-          onClick={() => triggerEmoji('🔥')}
-          className="p-2 text-xl hover:scale-125 transition-transform active:scale-95"
-          title="Fire"
-        >
-          🔥
-        </button>
-        <button
-          onClick={() => triggerEmoji('💖')}
-          className="p-2 text-xl hover:scale-125 transition-transform active:scale-95"
-          title="Heart Love"
-        >
-          💖
-        </button>
-        <button
-          onClick={() => triggerEmoji('🎉')}
-          className="p-2 text-xl hover:scale-125 transition-transform active:scale-95"
-          title="Party Confetti"
-        >
-          🎉
-        </button>
+      {/* Prominent Center Bottom Recording & Reaction Trigger Bar */}
+      <div className="absolute bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 max-w-[95vw]">
+        
+        {/* Reaction Buttons */}
+        <div className="bg-slate-900/90 border border-slate-700/80 backdrop-blur-xl px-2 py-1.5 rounded-2xl flex items-center gap-1 shadow-2xl">
+          <button onClick={() => triggerEmoji('🎈')} className="p-1.5 text-lg hover:scale-125 transition-transform" title="Balloons">🎈</button>
+          <button onClick={() => triggerEmoji('👍')} className="p-1.5 text-lg hover:scale-125 transition-transform" title="Thumbs Up">👍</button>
+          <button onClick={() => triggerEmoji('🔥')} className="p-1.5 text-lg hover:scale-125 transition-transform" title="Fire">🔥</button>
+          <button onClick={() => triggerEmoji('💖')} className="p-1.5 text-lg hover:scale-125 transition-transform" title="Heart">💖</button>
+          <button onClick={() => triggerEmoji('🎉')} className="p-1.5 text-lg hover:scale-125 transition-transform" title="Party">🎉</button>
+        </div>
 
-        <div className="w-px h-6 bg-slate-700 mx-1"></div>
+        {/* Master Record Trigger */}
+        {isRecording ? (
+          <button
+            onClick={stopRecording}
+            className="px-5 py-2.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-black text-xs sm:text-sm shadow-xl shadow-red-600/50 flex items-center gap-2 animate-pulse border-2 border-white/40"
+          >
+            <Square className="w-4 h-4 fill-white" />
+            <span>STOP REC ({formatTimer(recordingSeconds)})</span>
+          </button>
+        ) : (
+          <button
+            onClick={startRecording}
+            className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs sm:text-sm shadow-xl shadow-red-600/40 flex items-center gap-2 border-2 border-white/20 transform active:scale-95"
+          >
+            <div className="w-3 h-3 rounded-full bg-white animate-ping"></div>
+            <span>START RECORDING</span>
+          </button>
+        )}
 
-        {/* Play / Pause Sync Button */}
+        {/* Play / Pause Scroll */}
         <button
           onClick={togglePlay}
-          className="p-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold transition-all"
-          title={isPlaying ? 'Pause Scroll' : 'Play Scroll'}
+          className="p-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-2xl font-bold shadow-xl transition-all"
+          title={isPlaying ? 'Pause Prompter' : 'Play Prompter'}
         >
-          {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+          {isPlaying ? <Pause className="w-5 h-5 fill-slate-950" /> : <Play className="w-5 h-5 fill-slate-950 ml-0.5" />}
         </button>
+
       </div>
 
       {/* Studio Bottom Quick Toolbelt */}
-      <footer className="h-16 px-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between text-xs text-slate-300 z-30">
+      <footer className="h-14 sm:h-16 px-3 sm:px-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between text-xs text-slate-300 z-30">
         
-        {/* Filter Selection Chips */}
-        <div className="flex items-center gap-2 overflow-x-auto py-1 scrollbar-none">
-          <span className="text-slate-500 font-bold text-[10px] uppercase hidden sm:inline">Camera FX:</span>
+        {/* Camera Filter Chips */}
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none max-w-[55vw] sm:max-w-none">
+          <span className="text-slate-500 font-bold text-[10px] uppercase hidden sm:inline">FX:</span>
           {(['beauty', 'cinematic', 'matrix', 'monochrome', 'none'] as VideoFilter[]).map(f => (
             <button
               key={f}
               onClick={() => setOverlayConfig(prev => ({ ...prev, filter: f }))}
-              className={`px-3 py-1.5 rounded-xl capitalize font-semibold transition-all shrink-0 ${
+              className={`px-2.5 py-1 rounded-xl capitalize font-semibold transition-all shrink-0 text-[11px] sm:text-xs ${
                 overlayConfig.filter === f
-                  ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
+                  ? 'bg-cyan-500 text-slate-950 font-bold shadow-md'
                   : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
               }`}
             >
-              {f === 'beauty' ? '✨ Beauty Glow' : f === 'matrix' ? '🟩 Matrix Cyber' : f}
+              {f === 'beauty' ? '✨ Beauty' : f === 'matrix' ? '🟩 Matrix' : f}
             </button>
           ))}
         </div>
 
-        {/* Stage Adjustments */}
+        {/* Lighting & Swap Sides Toolbelt */}
         <div className="flex items-center gap-2">
-          {/* Swap Sides */}
+          
+          {/* Lighting Brightness Slider */}
+          <div className="hidden sm:flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-700">
+            <Sun className="w-3.5 h-3.5 text-amber-400" />
+            <input
+              type="range"
+              min={70}
+              max={150}
+              value={lightingBrightness}
+              onChange={(e) => setLightingBrightness(Number(e.target.value))}
+              className="w-16 accent-amber-400 cursor-pointer h-1.5 bg-slate-700 rounded-lg"
+              title="Lighting Brightness"
+            />
+          </div>
+
+          {/* Swap Sides Button */}
           <button
             onClick={() => setOverlayConfig(prev => ({ ...prev, mediaSwapped: !prev.mediaSwapped }))}
-            className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors"
-            title="Swap Left / Right Sides"
+            className="p-1.5 sm:p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 flex items-center gap-1 transition-colors text-[11px]"
+            title="Swap Left / Right Panels"
           >
-            <RefreshCw className="w-4 h-4 text-amber-400" />
-            <span className="hidden md:inline">Swap Sides</span>
+            <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Swap</span>
           </button>
 
           {/* Speed Slider */}
-          <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700">
-            <span className="text-[10px] text-slate-400 font-mono">SPD: {speed}</span>
+          <div className="flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-700">
+            <span className="text-[10px] text-slate-400 font-mono">SPD:{speed}</span>
             <input
               type="range"
               min={5}
               max={60}
               value={speed}
               onChange={(e) => setSpeed(Number(e.target.value))}
-              className="w-20 accent-amber-400 cursor-pointer h-1.5 bg-slate-700 rounded-lg"
+              className="w-14 sm:w-16 accent-amber-400 cursor-pointer h-1.5 bg-slate-700 rounded-lg"
             />
           </div>
         </div>
