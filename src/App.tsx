@@ -122,7 +122,7 @@ export function App() {
                       </span>
                     </div>
                     <p className="text-[11px] sm:text-xs text-slate-300 mt-0.5 max-w-2xl">
-                      Official free teleprompter for <button onClick={() => setIsOwnerModalOpen(true)} className="text-amber-300 hover:underline font-semibold">Debzane Concepts</button>. Powered by <strong className="text-debzane-blue-300">JV Impact Initiative</strong> (Dev: Sylvester Oga Ogaji).
+                      Official free teleprompter for <button onClick={() => setIsOwnerModalOpen(true)} className="text-amber-300 hover:underline font-semibold">Debzane Concepts</button>. Powered by <strong className="text-debzane-blue-300">JV ImpactVR Initiative LTD/GTE</strong> (Dev: Sylvester Oga Ogaji).
                     </p>
                   </div>
                 </div>
@@ -188,7 +188,7 @@ export function App() {
                 <span>•</span>
                 <span>Created by Sylvester Oga Ogaji</span>
                 <span>•</span>
-                <span className="text-debzane-blue-400">JV Impact Initiative</span>
+                <span className="text-debzane-blue-400">JV ImpactVR Initiative LTD/GTE</span>
               </div>
 
               <div className="flex items-center gap-4 text-slate-400">

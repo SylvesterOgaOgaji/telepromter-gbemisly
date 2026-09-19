@@ -74,7 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-slate-400">
               <span className="text-slate-300 font-medium">Debzane Concepts</span>
               <span className="text-slate-600">•</span>
-              <span className="hidden xs:inline">100% Free & Unlimited</span>
+              <span className="text-debzane-blue-300">JV ImpactVR Initiative LTD/GTE</span>
             </div>
           </div>
         </div>

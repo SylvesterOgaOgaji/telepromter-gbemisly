@@ -69,7 +69,7 @@ export const OwnerModal: React.FC<OwnerModalProps> = ({
                 Founder, Debzane Concepts • Public Health Practitioner
               </p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Developer: <strong className="text-slate-200">Sylvester Oga Ogaji</strong> (JV Impact Initiative)
+                Developer: <strong className="text-slate-200">Sylvester Oga Ogaji</strong> (JV ImpactVR Initiative LTD/GTE)
               </p>
             </div>
           </div>
