@@ -21,8 +21,8 @@ import {
   MicOff, 
   Volume2, 
   VolumeX, 
-  Video, 
-  VideoOff,
+  Camera, 
+  VideoOff, 
   Layers, 
   Download,
   Flame,
@@ -32,9 +32,8 @@ import {
   Youtube,
   Link,
   Film,
-  Camera,
-  RotateCcw,
-  SlidersHorizontal
+  Image as ImageIcon,
+  Type
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -67,8 +66,8 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [scriptTitle, setScriptTitle] = useState(script.title);
   const [scriptContent, setScriptContent] = useState(script.content);
   const [showScriptDrawer, setShowScriptDrawer] = useState(false);
+  const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
-  const [showFilterSettings, setShowFilterSettings] = useState(false);
 
   // Media Reference state
   const [mediaSourceUrl, setMediaSourceUrl] = useState<string>('');
@@ -76,19 +75,21 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [isYoutubeIframe, setIsYoutubeIframe] = useState<boolean>(false);
   const [youtubeEmbedId, setYoutubeEmbedId] = useState<string>('');
 
-  // Audio & Hardware Controls
+  // Audio Volume Sliders & Mute Controls (For both desktop & mobile)
+  const [micVolume, setMicVolume] = useState<number>(1);
+  const [mediaVolume, setMediaVolume] = useState<number>(1);
   const [micMuted, setMicMuted] = useState<boolean>(false);
   const [mediaMuted, setMediaMuted] = useState<boolean>(false);
   const [cameraEnabled, setCameraEnabled] = useState<boolean>(true);
 
-  // Video Output & Orientation (16:9 Landscape or 9:16 Portrait)
+  // Video Output & Orientation
   const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
   const [activeFilter, setActiveFilter] = useState<VideoFilter>('beauty');
   const [brightness, setBrightness] = useState<number>(100);
-  const [contrast, setContrast] = useState<number>(100);
-  const [saturation, setSaturation] = useState<number>(100);
 
-  // Overlays
+  // Custom Logo & News Ticker Text Customization
+  const [customLogoUrl, setCustomLogoUrl] = useState<string>('/debzane-logo.jpg');
+  const [customLogoText, setCustomLogoText] = useState<string>('DEBZANE STUDIO');
   const [showTicker, setShowTicker] = useState<boolean>(true);
   const [tickerText, setTickerText] = useState<string>('BREAKING: Debzane Concept Studio • For Coaching & Inquiries Call: 08057961025 • 100% Free');
   const [mediaSwapped, setMediaSwapped] = useState<boolean>(false);
@@ -107,12 +108,13 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const mediaVideoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const prompterScrollRef = useRef<HTMLDivElement>(null);
+  const logoImageRef = useRef<HTMLImageElement | null>(null);
 
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
-  const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const mediaAudioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const micGainNodeRef = useRef<GainNode | null>(null);
+  const mediaGainNodeRef = useRef<GainNode | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -126,30 +128,35 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     setScriptContent(script.content);
   }, [script.id, script.title, script.content]);
 
-  // Parse YouTube or direct URL
-  const parseVideoUrl = (url: string) => {
-    try {
-      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-      const match = url.match(regExp);
-      if (match && match[2].length === 11) {
-        return { isYoutube: true, id: match[2], directUrl: '' };
-      }
-      return { isYoutube: false, id: '', directUrl: url.trim() };
-    } catch {
-      return { isYoutube: false, id: '', directUrl: url.trim() };
-    }
+  // Pre-load custom logo image
+  useEffect(() => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = customLogoUrl;
+    img.onload = () => {
+      logoImageRef.current = img;
+    };
+  }, [customLogoUrl]);
+
+  // Robust YouTube URL Parser (Supports standard watch, youtu.be, embed, shorts, mobile)
+  const extractYoutubeId = (url: string): string => {
+    const trimmed = url.trim();
+    if (!trimmed) return '';
+    const regExp = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+    const match = trimmed.match(regExp);
+    return match && match[1] ? match[1] : '';
   };
 
   const handleApplyOnlineUrl = () => {
-    const parsed = parseVideoUrl(onlineInputUrl);
-    if (parsed.isYoutube) {
+    const ytId = extractYoutubeId(onlineInputUrl);
+    if (ytId) {
       setIsYoutubeIframe(true);
-      setYoutubeEmbedId(parsed.id);
+      setYoutubeEmbedId(ytId);
       setMediaSourceUrl('');
-    } else if (parsed.directUrl) {
+    } else if (onlineInputUrl.trim()) {
       setIsYoutubeIframe(false);
       setYoutubeEmbedId('');
-      setMediaSourceUrl(parsed.directUrl);
+      setMediaSourceUrl(onlineInputUrl.trim());
     }
   };
 
@@ -162,7 +169,14 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     setMediaSourceUrl(url);
   };
 
-  // Start Camera
+  const handleCustomLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setCustomLogoUrl(url);
+  };
+
+  // Start Camera with high compatibility for Desktop, Tablets & Mobile phones
   const startCamera = async () => {
     try {
       if (mediaStreamRef.current) {
@@ -170,8 +184,8 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          width: { ideal: 1920, min: 640 },
+          height: { ideal: 1080, min: 480 },
           facingMode: 'user'
         },
         audio: {
@@ -225,9 +239,25 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     }
   };
 
+  // Update real-time audio volume gains
+  useEffect(() => {
+    if (micGainNodeRef.current) {
+      micGainNodeRef.current.gain.value = micMuted ? 0 : micVolume;
+    }
+  }, [micVolume, micMuted]);
+
+  useEffect(() => {
+    if (mediaGainNodeRef.current) {
+      mediaGainNodeRef.current.gain.value = mediaMuted ? 0 : mediaVolume;
+    }
+    if (mediaVideoRef.current) {
+      mediaVideoRef.current.volume = mediaMuted ? 0 : mediaVolume;
+    }
+  }, [mediaVolume, mediaMuted]);
+
   // Explicit Math-based Filter String for Canvas Context
   const getCanvasFilterString = () => {
-    let base = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
+    let base = `brightness(${brightness}%)`;
     switch (activeFilter) {
       case 'beauty':
         return `${base} brightness(115%) contrast(108%) saturate(120%)`;
@@ -246,7 +276,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     }
   };
 
-  // 60FPS Canvas Compositing Engine (Combines Camera + Uploaded Video + Filters + Overlays + Ticker)
+  // 60FPS Canvas Compositing Engine
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -272,30 +302,27 @@ export const StudioModal: React.FC<StudioModalProps> = ({
 
       // Layout calculations
       if (orientation === 'landscape') {
-        // 16:9 Side-by-Side (50/50)
         const halfWidth = targetWidth / 2;
         const leftIsCam = mediaSwapped;
         const rightIsCam = !mediaSwapped;
 
-        // Draw Left Panel
         if (leftIsCam) {
           drawCamera(ctx, 0, 0, halfWidth, targetHeight);
         } else if (hasMedia && mediaVideoRef.current) {
           drawMedia(ctx, 0, 0, halfWidth, targetHeight, mediaVideoRef.current);
         } else {
-          drawPlaceholder(ctx, 0, 0, halfWidth, targetHeight, 'Reaction / Reference Video');
+          drawPlaceholder(ctx, 0, 0, halfWidth, targetHeight, isYoutubeIframe ? 'YouTube Video Embed Live' : 'Reaction / Reference Video');
         }
 
-        // Draw Right Panel
         if (rightIsCam) {
           drawCamera(ctx, halfWidth, 0, halfWidth, targetHeight);
         } else if (hasMedia && mediaVideoRef.current) {
           drawMedia(ctx, halfWidth, 0, halfWidth, targetHeight, mediaVideoRef.current);
         } else {
-          drawPlaceholder(ctx, halfWidth, 0, halfWidth, targetHeight, 'Reaction / Reference Video');
+          drawPlaceholder(ctx, halfWidth, 0, halfWidth, targetHeight, isYoutubeIframe ? 'YouTube Video Embed Live' : 'Reaction / Reference Video');
         }
 
-        // Center Divider Line
+        // Center Divider
         ctx.strokeStyle = '#334155';
         ctx.lineWidth = 4;
         ctx.beginPath();
@@ -304,30 +331,27 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         ctx.stroke();
 
       } else {
-        // 9:16 Portrait Top/Bottom (50/50 for TikTok / Reels)
+        // Portrait (9:16)
         const halfHeight = targetHeight / 2;
         const topIsCam = mediaSwapped;
         const bottomIsCam = !mediaSwapped;
 
-        // Draw Top
         if (topIsCam) {
           drawCamera(ctx, 0, 0, targetWidth, halfHeight);
         } else if (hasMedia && mediaVideoRef.current) {
           drawMedia(ctx, 0, 0, targetWidth, halfHeight, mediaVideoRef.current);
         } else {
-          drawPlaceholder(ctx, 0, 0, targetWidth, halfHeight, 'Reaction / Reference Video');
+          drawPlaceholder(ctx, 0, 0, targetWidth, halfHeight, isYoutubeIframe ? 'YouTube Video Embed Live' : 'Reaction / Reference Video');
         }
 
-        // Draw Bottom
         if (bottomIsCam) {
           drawCamera(ctx, 0, halfHeight, targetWidth, halfHeight);
         } else if (hasMedia && mediaVideoRef.current) {
           drawMedia(ctx, 0, halfHeight, targetWidth, halfHeight, mediaVideoRef.current);
         } else {
-          drawPlaceholder(ctx, 0, halfHeight, targetWidth, halfHeight, 'Reaction / Reference Video');
+          drawPlaceholder(ctx, 0, halfHeight, targetWidth, halfHeight, isYoutubeIframe ? 'YouTube Video Embed Live' : 'Reaction / Reference Video');
         }
 
-        // Center Divider Line
         ctx.strokeStyle = '#334155';
         ctx.lineWidth = 4;
         ctx.beginPath();
@@ -336,16 +360,21 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         ctx.stroke();
       }
 
-      // Draw Watermark Logo
+      // Draw Custom Brand Logo & Title
       ctx.save();
+      if (logoImageRef.current) {
+        try {
+          ctx.drawImage(logoImageRef.current, targetWidth - 280, 24, 44, 44);
+        } catch (e) {}
+      }
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 28px "Space Grotesk", sans-serif';
-      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.font = 'bold 24px "Space Grotesk", sans-serif';
+      ctx.shadowColor = 'rgba(0,0,0,0.9)';
       ctx.shadowBlur = 8;
-      ctx.fillText('DEBZANE STUDIO', targetWidth - 260, 48);
+      ctx.fillText(customLogoText || 'STUDIO', targetWidth - 220, 52);
       ctx.restore();
 
-      // Draw CNN News Ticker on Canvas Output
+      // Draw CNN News Ticker
       if (showTicker) {
         const tickerHeight = 56;
         const tickerY = targetHeight - tickerHeight;
@@ -395,10 +424,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       context.rect(x, y, w, h);
       context.clip();
 
-      // Apply baked-in filter
       context.filter = getCanvasFilterString();
-
-      // Mirror selfie camera
       context.translate(x + w, y);
       context.scale(-1, 1);
       context.drawImage(cameraVideoRef.current, 0, 0, w, h);
@@ -431,43 +457,45 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     return () => {
       if (renderAnimIdRef.current) cancelAnimationFrame(renderAnimIdRef.current);
     };
-  }, [orientation, activeFilter, brightness, contrast, saturation, showTicker, tickerText, mediaSwapped, mediaSourceUrl, isYoutubeIframe, cameraEnabled]);
+  }, [orientation, activeFilter, brightness, showTicker, tickerText, mediaSwapped, mediaSourceUrl, isYoutubeIframe, cameraEnabled, customLogoText, customLogoUrl]);
 
-  // Start Canvas + Combined Audio Recording
+  // Start Canvas + Audio Recording
   const startRecording = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     try {
-      // 1. Audio Mixer Setup
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const dest = audioCtx.createMediaStreamDestination();
       audioContextRef.current = audioCtx;
       audioDestinationRef.current = dest;
 
-      // Add Microphone if active & not muted
-      if (mediaStreamRef.current && mediaStreamRef.current.getAudioTracks().length > 0 && !micMuted) {
+      // Microphone Track with Volume Gain
+      if (mediaStreamRef.current && mediaStreamRef.current.getAudioTracks().length > 0) {
         const micSource = audioCtx.createMediaStreamSource(mediaStreamRef.current);
-        micSource.connect(dest);
-        micSourceRef.current = micSource;
+        const micGain = audioCtx.createGain();
+        micGain.gain.value = micMuted ? 0 : micVolume;
+        micSource.connect(micGain);
+        micGain.connect(dest);
+        micGainNodeRef.current = micGain;
       }
 
-      // Add Media Audio if active & not muted
-      if (mediaVideoRef.current && !mediaMuted) {
+      // Media Track with Volume Gain
+      if (mediaVideoRef.current) {
         try {
           const mediaSource = audioCtx.createMediaElementSource(mediaVideoRef.current);
-          mediaSource.connect(dest);
-          mediaSource.connect(audioCtx.destination);
-          mediaAudioSourceRef.current = mediaSource;
-        } catch (e) {
-          // Ignore if already connected
-        }
+          const mediaGain = audioCtx.createGain();
+          mediaGain.gain.value = mediaMuted ? 0 : mediaVolume;
+          mediaSource.connect(mediaGain);
+          mediaGain.connect(dest);
+          mediaGain.connect(audioCtx.destination);
+          mediaGainNodeRef.current = mediaGain;
+        } catch (e) {}
       }
 
-      // 2. Capture 60FPS Video Stream from Canvas
+      // Capture 60FPS Video
       const canvasStream = canvas.captureStream(60);
 
-      // 3. Combine Tracks
       const combinedStream = new MediaStream([
         ...canvasStream.getVideoTracks(),
         ...dest.stream.getAudioTracks()
@@ -583,7 +611,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] bg-slate-950 flex flex-col select-none overflow-hidden animate-in fade-in duration-200 text-slate-100">
+    <div className="fixed inset-0 z-[80] bg-slate-950 flex flex-col select-none overflow-hidden animate-in fade-in duration-200 text-slate-100 font-sans">
       
       {/* Hidden Source Media Elements for Canvas Compositor */}
       <video ref={cameraVideoRef} autoPlay playsInline muted className="hidden" />
@@ -647,7 +675,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             title={mediaMuted ? 'Click to Unmute Reference Sound' : 'Click to Mute Reference Sound'}
           >
             {mediaMuted ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
-            <span className="hidden md:inline">{mediaMuted ? 'Video Audio: MUTED' : 'Video Audio: ON'}</span>
+            <span className="hidden md:inline">{mediaMuted ? 'Video Sound: MUTED' : 'Video Sound: ON'}</span>
           </button>
 
           {/* Camera On/Off Toggle */}
@@ -674,7 +702,19 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             <span className="hidden xs:inline">{orientation === 'portrait' ? '9:16' : '16:9'}</span>
           </button>
 
-          {/* Edit Script Drawer */}
+          {/* Custom Logo & News Ticker Drawer Button */}
+          <button
+            onClick={() => setShowSettingsDrawer(!showSettingsDrawer)}
+            className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all ${
+              showSettingsDrawer ? 'bg-cyan-500 text-slate-950 border-cyan-400' : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+            }`}
+            title="Custom Logo & News Ticker Settings"
+          >
+            <ImageIcon className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Logo & Ticker</span>
+          </button>
+
+          {/* Edit Script Drawer Button */}
           <button
             onClick={() => setShowScriptDrawer(!showScriptDrawer)}
             className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all ${
@@ -695,6 +735,49 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         </div>
       </header>
 
+      {/* Logo & Ticker Customization Settings Drawer */}
+      {showSettingsDrawer && (
+        <div className="bg-slate-900/98 border-b border-slate-700 p-4 z-40 grid grid-cols-1 md:grid-cols-3 gap-4 max-h-[40vh] overflow-y-auto text-xs animate-in slide-in-from-top-2">
+          
+          {/* Custom Logo Upload */}
+          <div className="space-y-2 bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+            <span className="font-bold text-cyan-300 flex items-center gap-1.5">
+              <ImageIcon className="w-4 h-4 text-cyan-400" />
+              <span>Change Logo Here:</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <img src={customLogoUrl} alt="Logo Preview" className="w-10 h-10 object-contain rounded-lg border border-slate-700 bg-slate-900" />
+              <label className="flex-1 py-2 px-3 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 rounded-xl cursor-pointer text-center font-bold">
+                <span>Upload Custom Logo</span>
+                <input type="file" accept="image/*" onChange={handleCustomLogoUpload} className="hidden" />
+              </label>
+            </div>
+            <input
+              type="text"
+              value={customLogoText}
+              onChange={(e) => setCustomLogoText(e.target.value)}
+              placeholder="Brand Label (e.g. DEBZANE STUDIO)"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
+            />
+          </div>
+
+          {/* Scrolling News Ticker Editor */}
+          <div className="space-y-2 bg-slate-950/80 p-3 rounded-xl border border-slate-800 md:col-span-2">
+            <span className="font-bold text-amber-300 flex items-center gap-1.5">
+              <Type className="w-4 h-4 text-amber-400" />
+              <span>Edit Scrolling Bottom News Ticker:</span>
+            </span>
+            <textarea
+              value={tickerText}
+              onChange={(e) => setTickerText(e.target.value)}
+              placeholder="Enter custom phone number, booking info, or breaking headlines..."
+              className="w-full p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white resize-none h-16"
+            />
+          </div>
+
+        </div>
+      )}
+
       {/* Script Drawer */}
       {showScriptDrawer && (
         <div className="bg-slate-900/98 border-b border-slate-700 p-3 z-40 flex flex-col gap-2 max-h-[30vh] overflow-y-auto">
@@ -711,16 +794,18 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         </div>
       )}
 
-      {/* Media Input Link & Upload Bar */}
-      <div className="bg-slate-900/90 border-b border-slate-800 px-3 py-2 flex flex-wrap items-center gap-2 text-xs z-20">
-        <span className="text-slate-400 font-bold flex items-center gap-1">
-          <Link className="w-3.5 h-3.5 text-amber-400" />
-          <span>Reference Video / Reaction Link:</span>
-        </span>
-        <div className="flex-1 flex gap-1.5 min-w-[220px]">
+      {/* Media Input Link & Upload Bar with Real-time Volume Controls */}
+      <div className="bg-slate-900/90 border-b border-slate-800 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs z-20">
+        
+        {/* URL Input */}
+        <div className="flex-1 flex items-center gap-1.5 min-w-[280px]">
+          <span className="text-slate-400 font-bold hidden sm:inline flex items-center gap-1">
+            <Link className="w-3.5 h-3.5 text-amber-400" />
+            <span>Load Video:</span>
+          </span>
           <input
             type="text"
-            placeholder="Paste YouTube link, Facebook video, or MP4 URL..."
+            placeholder="Paste YouTube link (e.g. watch?v=..., youtu.be, shorts), Facebook, or MP4 URL..."
             value={onlineInputUrl}
             onChange={(e) => setOnlineInputUrl(e.target.value)}
             className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none focus:border-amber-400"
@@ -729,14 +814,48 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             onClick={handleApplyOnlineUrl}
             className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl"
           >
-            Load Link
+            Load Video
           </button>
+          <label className="px-3 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl cursor-pointer text-slate-200 flex items-center gap-1">
+            <Upload className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">Upload File</span>
+            <input type="file" accept="video/*,audio/*" onChange={handleFileUpload} className="hidden" />
+          </label>
         </div>
-        <label className="px-3 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl cursor-pointer text-slate-200 flex items-center gap-1">
-          <Upload className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Upload File</span>
-          <input type="file" accept="video/*,audio/*" onChange={handleFileUpload} className="hidden" />
-        </label>
+
+        {/* Real-time Volume Sliders for Desktop & Mobile */}
+        <div className="flex items-center gap-3 bg-slate-950/80 px-3 py-1 rounded-xl border border-slate-800">
+          
+          {/* Mic Volume */}
+          <div className="flex items-center gap-1.5" title="Microphone Volume">
+            <Mic className="w-3.5 h-3.5 text-emerald-400" />
+            <input
+              type="range"
+              min={0}
+              max={2}
+              step={0.1}
+              value={micVolume}
+              onChange={(e) => setMicVolume(Number(e.target.value))}
+              className="w-14 sm:w-16 accent-emerald-400 cursor-pointer h-1.5 bg-slate-700 rounded-lg"
+            />
+          </div>
+
+          {/* Video Audio Volume */}
+          <div className="flex items-center gap-1.5" title="Video Soundtrack Volume">
+            <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
+            <input
+              type="range"
+              min={0}
+              max={2}
+              step={0.1}
+              value={mediaVolume}
+              onChange={(e) => setMediaVolume(Number(e.target.value))}
+              className="w-14 sm:w-16 accent-cyan-400 cursor-pointer h-1.5 bg-slate-700 rounded-lg"
+            />
+          </div>
+
+        </div>
+
       </div>
 
       {/* Main Studio Compositor Stage */}
@@ -744,10 +863,29 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         
         {/* The Live 60FPS Composited Canvas (This is what gets recorded with baked-in filters & split screen) */}
         <div className={`relative max-w-full max-h-full flex items-center justify-center rounded-2xl overflow-hidden border border-slate-800 shadow-2xl ${orientation === 'portrait' ? 'aspect-[9/16]' : 'aspect-[16/9]'}`}>
+          
           <canvas
             ref={canvasRef}
             className="w-full h-full object-contain"
           />
+
+          {/* YouTube Embed Player Layer (If YouTube URL is loaded) */}
+          {isYoutubeIframe && youtubeEmbedId && (
+            <div 
+              className={`absolute z-10 overflow-hidden ${
+                orientation === 'portrait' 
+                  ? (mediaSwapped ? 'bottom-0 left-0 right-0 h-1/2' : 'top-0 left-0 right-0 h-1/2')
+                  : (mediaSwapped ? 'top-0 right-0 bottom-0 w-1/2' : 'top-0 left-0 bottom-0 w-1/2')
+              }`}
+            >
+              <iframe
+                src={`https://www.youtube.com/embed/${youtubeEmbedId}?autoplay=1&enablejsapi=1&origin=${window.location.origin}`}
+                title="YouTube Reference Player"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                className="w-full h-full border-0"
+              />
+            </div>
+          )}
 
           {/* In-Camera Teleprompter Corridor Overlay */}
           <div 
