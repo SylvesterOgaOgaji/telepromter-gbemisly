@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Script } from '../types';
 import { 
   Play, 
@@ -14,20 +14,13 @@ import {
   Sparkles, 
   Copy, 
   Check, 
-  Activity, 
   Award, 
   ClipboardPaste,
   Bold,
   Italic,
-  Underline,
   Highlighter,
-  Palette,
-  Eye,
-  Type,
   List,
-  ChevronLeft,
-  Share2,
-  Trash
+  Sparkle
 } from 'lucide-react';
 
 interface ScriptEditorProps {
@@ -40,6 +33,12 @@ interface ScriptEditorProps {
   onToggleFavorite: (id: string) => void;
   onLaunchPrompter: () => void;
   onOpenOwnerProfile: () => void;
+}
+
+interface FloatingToolbarPos {
+  x: number;
+  y: number;
+  visible: boolean;
 }
 
 export const ScriptEditor: React.FC<ScriptEditorProps> = ({
@@ -62,6 +61,14 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   // Mobile Tab View: 'library' or 'editor'
   const [mobileTab, setMobileTab] = useState<'library' | 'editor'>('editor');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Floating MS Word style inline context toolbar
+  const [floatingToolbar, setFloatingToolbar] = useState<FloatingToolbarPos>({
+    x: 0,
+    y: 0,
+    visible: false
+  });
 
   // Sync state when active script changes
   useEffect(() => {
@@ -95,7 +102,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
     const newContent = '';
     const newId = onSaveScript({ title: newTitle, content: newContent, category: 'General' });
     onSelectScript(newId);
-    setMobileTab('editor'); // Automatically open editor on mobile!
+    setMobileTab('editor');
     setTimeout(() => {
       textareaRef.current?.focus();
     }, 100);
@@ -104,6 +111,42 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   const handleSelectScriptAndOpen = (id: string) => {
     onSelectScript(id);
     setMobileTab('editor');
+  };
+
+  // MS Word style Floating Toolbar on Text Selection or Right-Click / Tap
+  const updateFloatingToolbarPosition = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+
+    // If text is highlighted / selected
+    if (start !== end && end > start) {
+      const rect = textarea.getBoundingClientRect();
+      // Calculate approximate position inside textarea
+      const lineIndex = content.substr(0, start).split('\n').length;
+      const topOffset = Math.min(rect.height - 60, Math.max(10, lineIndex * 24 - textarea.scrollTop + 10));
+
+      setFloatingToolbar({
+        x: Math.min(window.innerWidth - 280, Math.max(20, rect.left + 20)),
+        y: Math.max(60, rect.top + topOffset - 45),
+        visible: true
+      });
+    } else {
+      // Hide toolbar if no text selected
+      setFloatingToolbar(prev => ({ ...prev, visible: false }));
+    }
+  }, [content]);
+
+  // Context Menu Handler (Right Click or Long Press on cursor point)
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setFloatingToolbar({
+      x: Math.min(window.innerWidth - 300, Math.max(10, e.clientX - 60)),
+      y: Math.max(60, e.clientY - 50),
+      visible: true
+    });
   };
 
   // Text formatting tools for accessibility and emphasis
@@ -119,11 +162,14 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
     if (selectedText) {
       replacement = `${prefix}${selectedText}${suffix}`;
     } else {
-      replacement = `${prefix}SAMPLE TEXT${suffix}`;
+      replacement = `${prefix}ENTER TEXT${suffix}`;
     }
 
     const newContent = content.substring(0, start) + replacement + content.substring(end);
     handleContentChange(newContent);
+
+    // Hide floating toolbar after applying
+    setFloatingToolbar(prev => ({ ...prev, visible: false }));
 
     setTimeout(() => {
       textarea.focus();
@@ -191,7 +237,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
     }
   };
 
-  // Metrics
+  // Metrics (Unlimited support)
   const words = content.trim() ? content.trim().split(/\s+/).length : 0;
   const characters = content.length;
   const estimatedSeconds = Math.ceil(words / 2.5);
@@ -204,9 +250,80 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-5">
+    <div ref={containerRef} className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-5 relative">
       
-      {/* Mobile Switcher Tab (Only visible on small screens) */}
+      {/* MS Word Style Floating Context Toolbar on Selection or Cursor Position */}
+      {floatingToolbar.visible && (
+        <div
+          style={{
+            position: 'fixed',
+            left: `${floatingToolbar.x}px`,
+            top: `${floatingToolbar.y}px`,
+            zIndex: 60
+          }}
+          className="flex items-center gap-1 p-1.5 bg-slate-950/98 border-2 border-amber-400 rounded-2xl shadow-2xl backdrop-blur-2xl animate-in zoom-in-90 duration-150"
+        >
+          <button
+            type="button"
+            onClick={() => applyFormatting('**', '**')}
+            className="p-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-black rounded-lg border border-slate-800 text-xs flex items-center gap-1 shadow"
+            title="Bold Selection"
+          >
+            <Bold className="w-3.5 h-3.5" />
+            <span>Bold</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => applyFormatting('*', '*')}
+            className="p-1.5 bg-slate-900 hover:bg-slate-800 text-debzane-blue-400 font-bold rounded-lg border border-slate-800 text-xs flex items-center gap-1 shadow"
+            title="Italic Selection"
+          >
+            <Italic className="w-3.5 h-3.5" />
+            <span>Italic</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={insertCueMarker}
+            className="p-1.5 bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 font-bold rounded-lg border border-amber-500/30 text-xs flex items-center gap-1"
+            title="Insert Pause Cue"
+          >
+            <Clock className="w-3.5 h-3.5 text-amber-400" />
+            <span>Pause</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={insertHighlightCue}
+            className="p-1.5 bg-cyan-500/15 hover:bg-cyan-500/30 text-cyan-300 font-bold rounded-lg border border-cyan-500/30 text-xs flex items-center gap-1"
+            title="Emphasis Cue"
+          >
+            <Highlighter className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Emphasis</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => applyFormatting('• ')}
+            className="p-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 font-bold rounded-lg border border-slate-800 text-xs flex items-center gap-1"
+            title="Bullet Point"
+          >
+            <span className="text-amber-400 font-bold">•</span>
+            <span>Bullet</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFloatingToolbar(prev => ({ ...prev, visible: false }))}
+            className="p-1 text-slate-400 hover:text-white ml-0.5 text-xs"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Mobile Switcher Tab */}
       <div className="flex lg:hidden rounded-2xl bg-slate-900/90 border border-slate-800 p-1 mb-3.5 shadow-lg">
         <button
           onClick={() => setMobileTab('editor')}
@@ -260,12 +377,10 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-amber-300/90 truncate">
-                Fresh & Fit Wellness & Creator Studio
+                Oluwagbemisola J. Akinlade-Ogaji
               </p>
               <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400">
-                <span className="text-debzane-blue-300">Learn More</span>
-                <span>•</span>
-                <span className="text-slate-400">@debzane_concepts</span>
+                <span className="text-debzane-blue-300">Public Health Practitioner</span>
               </div>
             </div>
           </div>
@@ -283,7 +398,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
               <div className="flex items-center gap-1.5">
                 <label 
                   className="p-2 text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700/80 rounded-lg cursor-pointer transition-colors"
-                  title="Import .txt script file"
+                  title="Import script (.txt, .md, .json)"
                 >
                   <Upload className="w-4 h-4" />
                   <input type="file" accept=".txt,.md,.json" onChange={handleFileUpload} className="hidden" />
@@ -436,7 +551,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
               </div>
             </div>
 
-            {/* Accessibility & Rich Formatting Toolbar */}
+            {/* Accessibility & Rich Formatting Toolbar (Sticky top) */}
             <div className="flex flex-wrap items-center gap-1 sm:gap-2 py-2 border-b border-slate-800/70 text-xs text-slate-300">
               <span className="text-[10px] uppercase font-bold text-slate-500 mr-1 hidden sm:inline">Formatting:</span>
               
@@ -513,18 +628,23 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-950/80 rounded-lg border border-slate-800/80 text-slate-400">
                 <span>{characters} chars</span>
               </div>
-              <div className="ml-auto text-[10px] text-slate-500 hidden sm:block">
-                ⚡ Auto-saved locally
+              <div className="ml-auto text-[10px] text-amber-400/90 font-medium hidden sm:block">
+                ⚡ Unlimited length allowed (10+ pages)
               </div>
             </div>
 
-            {/* Script Textarea Content */}
+            {/* Script Textarea Content with Selection and Context Menu Listener */}
             <div className="flex-1 mt-1 relative">
               <textarea
                 ref={textareaRef}
                 value={content}
                 onChange={(e) => handleContentChange(e.target.value)}
-                placeholder="Type or paste your video script, sermon, speech, or presentation here..."
+                onSelect={updateFloatingToolbarPosition}
+                onKeyUp={updateFloatingToolbarPosition}
+                onMouseUp={updateFloatingToolbarPosition}
+                onTouchEnd={updateFloatingToolbarPosition}
+                onContextMenu={handleContextMenu}
+                placeholder="Type or paste your video script, sermon, speech, health lecture, or presentation here... (Highlight any text for instant MS Word style formatting tools)"
                 className="w-full h-full p-3 sm:p-4 bg-slate-950/90 border border-slate-800/80 rounded-xl text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-400/50 resize-none font-reading text-sm sm:text-base leading-relaxed overflow-y-auto"
               />
             </div>
@@ -533,7 +653,7 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
             <div className="mt-2.5 pt-2.5 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500">
               <span className="flex items-center gap-1 text-[11px]">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>Tip: Press <kbd className="px-1 py-0.5 bg-slate-800 rounded text-slate-300 text-[10px]">Space</kbd> to pause or pedal in prompter.</span>
+                <span>Tip: Highlight text or right-click anywhere for floating MS Word editing tools.</span>
               </span>
               <span className="text-amber-400/80 font-medium text-[11px]">Debzane Concepts • 100% Free</span>
             </div>

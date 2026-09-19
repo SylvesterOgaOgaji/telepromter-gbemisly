@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 
 import { InstallPrompt } from './components/InstallPrompt';
+import { AccessibilityFloating } from './components/AccessibilityFloating';
 
 export function App() {
   const {
@@ -220,6 +221,9 @@ export function App() {
           </footer>
         </>
       )}
+
+      {/* Floating Accessibility Assistive Tool Badge */}
+      <AccessibilityFloating currentText={activeScript?.content} />
 
       {/* PWA Install Invite Prompt */}
       <InstallPrompt />

@@ -114,8 +114,6 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
       lastTimeRef.current = time;
 
       if (isPlaying && scrollElem) {
-        // speed formula: pixels per second
-        // speed 1 => 15px/sec, speed 50 => 120px/sec, speed 100 => 350px/sec
         const pixelsPerSecond = 10 + Math.pow(settings.speed, 1.4) * 2.5;
         scrollElem.scrollTop += pixelsPerSecond * deltaTime;
 
@@ -171,7 +169,6 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
         case 'ArrowUp':
         case 'PageUp':
           e.preventDefault();
-          // Increase speed or step up
           if (e.shiftKey) {
             if (scrollContainerRef.current) scrollContainerRef.current.scrollTop -= 100;
           } else {
@@ -181,7 +178,6 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
         case 'ArrowDown':
         case 'PageDown':
           e.preventDefault();
-          // Decrease speed or step down
           if (e.shiftKey) {
             if (scrollContainerRef.current) scrollContainerRef.current.scrollTop += 100;
           } else {
@@ -228,11 +224,10 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
           style={{
             top: `${settings.cueLinePositionPercent}%`,
             height: `${settings.fontSize * settings.lineHeight * 1.8}px`,
-            borderColor: `${settings.highlightColor}44`,
-            background: `linear-gradient(90deg, ${settings.highlightColor}08 0%, ${settings.highlightColor}18 50%, ${settings.highlightColor}08 100%)`,
+            borderColor: `${settings.highlightColor}55`,
+            background: `linear-gradient(90deg, ${settings.highlightColor}08 0%, ${settings.highlightColor}20 50%, ${settings.highlightColor}08 100%)`,
           }}
         >
-          {/* Subtle marker triangles on edges */}
           <div className="absolute left-2 top-1/2 -translate-y-1/2 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-l-8" style={{ borderLeftColor: settings.highlightColor }}></div>
           <div className="absolute right-2 top-1/2 -translate-y-1/2 w-0 h-0 border-t-8 border-t-transparent border-b-8 border-b-transparent border-r-8" style={{ borderRightColor: settings.highlightColor }}></div>
         </div>
@@ -242,13 +237,13 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
       <div 
         ref={scrollContainerRef}
         onClick={handleTogglePlay}
-        className={`w-full h-full overflow-y-scroll cursor-pointer scrollbar-none px-6 sm:px-12 md:px-20 ${mirrorClass}`}
+        className={`w-full h-full overflow-y-scroll cursor-pointer scrollbar-none px-4 sm:px-12 md:px-20 ${mirrorClass}`}
         style={{
           scrollBehavior: 'auto',
           WebkitOverflowScrolling: 'touch',
         }}
       >
-        {/* Spacer before text so starting text aligns at cue line */}
+        {/* Spacer before text */}
         <div 
           style={{ height: `${settings.cueLinePositionPercent}vh` }} 
           className="w-full flex items-center justify-center opacity-40 text-xs tracking-widest uppercase text-slate-500"
@@ -269,7 +264,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
           }}
         >
           {script.content.split('\n').map((paragraph, index) => (
-            <p key={index} className="mb-8 whitespace-pre-wrap">
+            <p key={index} className="mb-6 whitespace-pre-wrap">
               {paragraph || <br />}
             </p>
           ))}
@@ -281,27 +276,30 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
         </div>
       </div>
 
-      {/* Countdown Visual Overlay */}
+      {/* Correctly Spelled Countdown Visual Overlay */}
       {countdown !== null && (
-        <div className="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center z-40 pointer-events-none">
-          <div className="text-8xl sm:text-9xl font-extrabold text-teal-400 font-heading animate-ping">
+        <div className="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center z-40 pointer-events-none p-6 text-center">
+          <div className="text-8xl sm:text-9xl font-extrabold text-amber-400 font-heading animate-ping">
             {countdown === 0 ? 'ACTION!' : countdown}
           </div>
-          <p className="mt-6 text-slate-400 font-medium text-lg">
-            Debzain Concept Teleprompter Starting...
-          </p>
+          <div className="mt-8 flex items-center gap-2 px-4 py-2 bg-slate-900/90 rounded-full border border-amber-500/30">
+            <img src="/debzane-logo.jpg" alt="Debzane" className="w-5 h-5 rounded-full" />
+            <p className="text-amber-300 font-bold text-sm sm:text-base">
+              Debzane Concept Teleprompter Starting...
+            </p>
+          </div>
         </div>
       )}
 
       {/* Top Floating Mini Header */}
       <div 
-        className={`absolute top-0 left-0 right-0 p-4 flex items-center justify-between pointer-events-none transition-opacity duration-300 z-30 ${
+        className={`absolute top-0 left-0 right-0 p-3 sm:p-4 flex items-center justify-between pointer-events-none transition-opacity duration-300 z-30 ${
           showControls ? 'opacity-100' : 'opacity-0'
         }`}
       >
-        <div className="flex items-center gap-2 bg-slate-950/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-800 pointer-events-auto shadow-lg">
-          <Tv className="w-4 h-4 text-teal-400" />
-          <span className="text-xs font-semibold text-slate-200 max-w-[160px] sm:max-w-[280px] truncate">
+        <div className="flex items-center gap-2 bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-800 pointer-events-auto shadow-lg">
+          <img src="/debzane-logo.jpg" alt="Debzane" className="w-4 h-4 rounded-full" />
+          <span className="text-xs font-bold text-slate-200 max-w-[140px] sm:max-w-[280px] truncate">
             {script.title}
           </span>
         </div>
@@ -309,21 +307,21 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
         <div className="flex items-center gap-2 pointer-events-auto">
           <button
             onClick={() => setShowSettingsDrawer(!showSettingsDrawer)}
-            className="p-2.5 bg-slate-950/80 hover:bg-slate-800/90 text-slate-300 hover:text-white rounded-full border border-slate-800 backdrop-blur-md shadow-lg transition-all"
+            className="p-2.5 bg-slate-950/90 hover:bg-slate-800 text-slate-300 hover:text-white rounded-full border border-slate-800 backdrop-blur-md shadow-lg transition-all"
             title="Prompter Display Settings"
           >
             <Sliders className="w-4 h-4" />
           </button>
           <button
             onClick={toggleFullscreen}
-            className="p-2.5 bg-slate-950/80 hover:bg-slate-800/90 text-slate-300 hover:text-white rounded-full border border-slate-800 backdrop-blur-md shadow-lg transition-all"
+            className="p-2.5 bg-slate-950/90 hover:bg-slate-800 text-slate-300 hover:text-white rounded-full border border-slate-800 backdrop-blur-md shadow-lg transition-all"
             title="Toggle Fullscreen"
           >
             {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
           </button>
           <button
             onClick={onClose}
-            className="p-2.5 bg-red-950/70 hover:bg-red-900/90 text-red-200 rounded-full border border-red-800/60 backdrop-blur-md shadow-lg transition-all"
+            className="p-2.5 bg-red-950/80 hover:bg-red-900 text-red-200 rounded-full border border-red-800/60 backdrop-blur-md shadow-lg transition-all"
             title="Exit Prompter Mode"
           >
             <X className="w-5 h-5" />
@@ -337,12 +335,12 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
           showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
         }`}
       >
-        <div className="flex items-center gap-2 sm:gap-4 px-4 py-3 bg-slate-950/90 backdrop-blur-xl border border-slate-800/90 rounded-2xl shadow-2xl shadow-black/80">
+        <div className="flex items-center gap-1.5 sm:gap-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-950/95 backdrop-blur-xl border border-slate-800/90 rounded-2xl shadow-2xl shadow-black/80">
           
           {/* Rewind to Start */}
           <button
             onClick={handleReset}
-            className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
             title="Rewind to start (R)"
           >
             <RotateCcw className="w-4 h-4" />
@@ -351,23 +349,23 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
           {/* Speed Decrement */}
           <button
             onClick={() => onUpdateSetting('speed', Math.max(1, settings.speed - 2))}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
+            className="p-1.5 sm:p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
             title="Decrease Speed (Down Arrow)"
           >
             <Minus className="w-4 h-4" />
           </button>
 
           {/* Speed Slider */}
-          <div className="flex items-center gap-2 w-24 sm:w-36">
+          <div className="flex items-center gap-1.5 sm:gap-2 w-20 sm:w-36">
             <input
               type="range"
               min="1"
               max="100"
               value={settings.speed}
               onChange={(e) => onUpdateSetting('speed', Number(e.target.value))}
-              className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-400"
+              className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
             />
-            <span className="text-xs font-mono font-bold text-teal-400 w-7 text-right">
+            <span className="text-[11px] sm:text-xs font-mono font-bold text-amber-400 w-6 sm:w-7 text-right">
               {settings.speed}
             </span>
           </div>
@@ -375,31 +373,31 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
           {/* Speed Increment */}
           <button
             onClick={() => onUpdateSetting('speed', Math.min(100, settings.speed + 2))}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
+            className="p-1.5 sm:p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
             title="Increase Speed (Up Arrow)"
           >
             <Plus className="w-4 h-4" />
           </button>
 
-          <div className="w-[1px] h-6 bg-slate-800 mx-1" />
+          <div className="w-[1px] h-6 bg-slate-800 mx-0.5 sm:mx-1" />
 
           {/* Main Play / Pause Button */}
           <button
             onClick={handleTogglePlay}
-            className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-r from-teal-400 to-cyan-400 text-slate-950 font-bold shadow-lg shadow-teal-500/30 hover:scale-105 active:scale-95 transition-all"
+            className="flex items-center justify-center w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/30 hover:scale-105 active:scale-95 transition-all"
             title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
           >
-            {isPlaying ? <Pause className="w-6 h-6 fill-slate-950" /> : <Play className="w-6 h-6 fill-slate-950 ml-0.5" />}
+            {isPlaying ? <Pause className="w-5 h-5 sm:w-6 sm:h-6 fill-slate-950" /> : <Play className="w-5 h-5 sm:w-6 sm:h-6 fill-slate-950 ml-0.5" />}
           </button>
 
-          <div className="w-[1px] h-6 bg-slate-800 mx-1" />
+          <div className="w-[1px] h-6 bg-slate-800 mx-0.5 sm:mx-1" />
 
           {/* Mirror H Toggle */}
           <button
             onClick={() => onUpdateSetting('mirrorH', !settings.mirrorH)}
-            className={`p-2.5 rounded-xl border transition-all ${
+            className={`p-2 sm:p-2.5 rounded-xl border transition-all ${
               settings.mirrorH
-                ? 'bg-teal-500/20 border-teal-500 text-teal-300'
+                ? 'bg-amber-500/20 border-amber-500 text-amber-300'
                 : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
             }`}
             title="Horizontal Mirror (for beam splitter glass)"
@@ -410,9 +408,9 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
           {/* Mirror V Toggle */}
           <button
             onClick={() => onUpdateSetting('mirrorV', !settings.mirrorV)}
-            className={`p-2.5 rounded-xl border transition-all ${
+            className={`p-2 sm:p-2.5 rounded-xl border transition-all ${
               settings.mirrorV
-                ? 'bg-teal-500/20 border-teal-500 text-teal-300'
+                ? 'bg-amber-500/20 border-amber-500 text-amber-300'
                 : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
             }`}
             title="Vertical Mirror (for inverted mount)"
@@ -424,9 +422,9 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
 
       {/* Quick Settings Drawer */}
       {showSettingsDrawer && (
-        <div className="absolute right-6 top-20 w-80 bg-slate-950/95 backdrop-blur-xl border border-slate-800 rounded-2xl p-5 shadow-2xl z-40 text-slate-200 animate-in fade-in slide-in-from-right-4 duration-200">
+        <div className="absolute right-4 sm:right-6 top-18 sm:top-20 w-76 sm:w-80 bg-slate-950/98 backdrop-blur-xl border border-slate-800 rounded-3xl p-5 shadow-2xl z-40 text-slate-200 animate-in fade-in slide-in-from-right-4 duration-200">
           <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
-            <h3 className="font-heading font-bold text-sm flex items-center gap-2 text-teal-300">
+            <h3 className="font-heading font-bold text-sm flex items-center gap-2 text-amber-300">
               <Sliders className="w-4 h-4" />
               Prompter Adjustments
             </h3>
@@ -443,7 +441,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
             <div>
               <div className="flex justify-between mb-1">
                 <span>Font Size</span>
-                <span className="font-mono text-teal-400">{settings.fontSize}px</span>
+                <span className="font-mono text-amber-400">{settings.fontSize}px</span>
               </div>
               <input
                 type="range"
@@ -451,7 +449,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
                 max="96"
                 value={settings.fontSize}
                 onChange={(e) => onUpdateSetting('fontSize', Number(e.target.value))}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-400"
+                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
               />
             </div>
 
@@ -459,7 +457,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
             <div>
               <div className="flex justify-between mb-1">
                 <span>Line Height</span>
-                <span className="font-mono text-teal-400">{settings.lineHeight}x</span>
+                <span className="font-mono text-amber-400">{settings.lineHeight}x</span>
               </div>
               <input
                 type="range"
@@ -468,7 +466,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
                 step="0.1"
                 value={settings.lineHeight}
                 onChange={(e) => onUpdateSetting('lineHeight', Number(e.target.value))}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-400"
+                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
               />
             </div>
 
@@ -476,7 +474,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
             <div>
               <div className="flex justify-between mb-1">
                 <span>Reading Width</span>
-                <span className="font-mono text-teal-400">{settings.maxWidthPercent}%</span>
+                <span className="font-mono text-amber-400">{settings.maxWidthPercent}%</span>
               </div>
               <input
                 type="range"
@@ -484,7 +482,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
                 max="100"
                 value={settings.maxWidthPercent}
                 onChange={(e) => onUpdateSetting('maxWidthPercent', Number(e.target.value))}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-400"
+                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
               />
             </div>
 
@@ -492,7 +490,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
             <div>
               <div className="flex justify-between mb-1">
                 <span>Cue Marker Position</span>
-                <span className="font-mono text-teal-400">{settings.cueLinePositionPercent}%</span>
+                <span className="font-mono text-amber-400">{settings.cueLinePositionPercent}%</span>
               </div>
               <input
                 type="range"
@@ -500,7 +498,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
                 max="75"
                 value={settings.cueLinePositionPercent}
                 onChange={(e) => onUpdateSetting('cueLinePositionPercent', Number(e.target.value))}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-teal-400"
+                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
               />
             </div>
 
@@ -509,7 +507,7 @@ export const PrompterView: React.FC<PrompterViewProps> = ({
               <span>Show Reading Cue Line</span>
               <button
                 onClick={() => onUpdateSetting('cueLineVisible', !settings.cueLineVisible)}
-                className={`p-1.5 rounded-lg ${settings.cueLineVisible ? 'text-teal-400 bg-teal-950/60' : 'text-slate-500 bg-slate-900'}`}
+                className={`p-1.5 rounded-lg ${settings.cueLineVisible ? 'text-amber-400 bg-amber-950/60' : 'text-slate-500 bg-slate-900'}`}
               >
                 {settings.cueLineVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
               </button>
