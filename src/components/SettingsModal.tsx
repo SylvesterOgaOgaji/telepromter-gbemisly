@@ -123,7 +123,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
           >
             <Database className="w-3.5 h-3.5" />
-            <span>Supabase / Cloud</span>
+            <span>Storage & Persistence</span>
           </button>
         </div>
 
@@ -284,10 +284,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
 
           {activeTab === 'cloud' && (
-            <form onSubmit={handleSaveCloud} className="space-y-4">
-              <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl text-slate-400">
-                Connect your custom <strong className="text-teal-300">Supabase</strong> project to backup scripts, save community ratings, and sync scripts across all creator phones and tablets.
+            <div className="space-y-4">
+              <div className="p-3.5 bg-emerald-950/30 border border-emerald-500/30 rounded-xl space-y-1.5 text-slate-300">
+                <div className="flex items-center gap-2 font-bold text-emerald-300">
+                  <Database className="w-4 h-4" />
+                  <span>Browser-Native Persistent Storage: Active</span>
+                </div>
+                <p className="text-slate-400 leading-relaxed text-[11px]">
+                  All your scripts, studio settings, video trimmer cuts, and community reviews are stored locally in your browser's durable <strong>HTML5 IndexedDB Engine</strong> with automatic <strong>Persistent Storage API</strong> locking. Your data will not be evicted even under low disk space.
+                </p>
               </div>
+
+              <form onSubmit={handleSaveCloud} className="space-y-4 pt-1">
+                <div className="text-slate-400 text-xs">
+                  Optional: You can also connect a custom <strong className="text-teal-300">Supabase</strong> cloud database for cross-device multi-user sync.
+                </div>
 
               <div>
                 <label className="block text-slate-300 font-semibold mb-1">Supabase Project URL</label>
@@ -331,6 +342,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
               </div>
             </form>
+          </div>
           )}
         </div>
 
