@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://debzane-wellness-coach.lovable.app/sitemap.xml
+Sitemap: https://debzane-concept-teleprompter.pages.dev/sitemap.xml

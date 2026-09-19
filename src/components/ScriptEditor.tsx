@@ -15,7 +15,8 @@ import {
   Copy,
   Check,
   Activity,
-  Award
+  Award,
+  ClipboardPaste
 } from 'lucide-react';
 
 interface ScriptEditorProps {
@@ -116,6 +117,18 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
     navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handlePasteText = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        const newText = content ? `${content}\n\n${text}` : text;
+        handleContentChange(newText);
+      }
+    } catch (err) {
+      console.warn('Clipboard read error:', err);
+    }
   };
 
   // Metrics
@@ -304,6 +317,14 @@ export const ScriptEditor: React.FC<ScriptEditorProps> = ({
               </div>
 
               <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePasteText}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl transition-all"
+                  title="Paste from Clipboard"
+                >
+                  <ClipboardPaste className="w-4 h-4" />
+                  <span className="hidden sm:inline">Paste</span>
+                </button>
                 <button
                   onClick={handleCopyText}
                   className="p-2.5 text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700 rounded-xl transition-colors"
