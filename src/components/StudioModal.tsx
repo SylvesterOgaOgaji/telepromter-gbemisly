@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Script, PrompterSettings, VideoFilter } from '../types';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { 
@@ -22,6 +22,7 @@ import {
   Volume2, 
   VolumeX, 
   Video, 
+  VideoOff,
   Layers, 
   Download,
   Flame,
@@ -30,7 +31,10 @@ import {
   PartyPopper,
   Youtube,
   Link,
-  Film
+  Film,
+  Camera,
+  RotateCcw,
+  SlidersHorizontal
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -64,6 +68,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [scriptContent, setScriptContent] = useState(script.content);
   const [showScriptDrawer, setShowScriptDrawer] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [showFilterSettings, setShowFilterSettings] = useState(false);
 
   // Media Reference state
   const [mediaSourceUrl, setMediaSourceUrl] = useState<string>('');
@@ -71,12 +76,12 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [isYoutubeIframe, setIsYoutubeIframe] = useState<boolean>(false);
   const [youtubeEmbedId, setYoutubeEmbedId] = useState<string>('');
 
-  // Audio Mix Controls
+  // Audio & Hardware Controls
   const [micMuted, setMicMuted] = useState<boolean>(false);
   const [mediaMuted, setMediaMuted] = useState<boolean>(false);
-  const [mediaVolume, setMediaVolume] = useState<number>(1);
+  const [cameraEnabled, setCameraEnabled] = useState<boolean>(true);
 
-  // Video Output & Orientation
+  // Video Output & Orientation (16:9 Landscape or 9:16 Portrait)
   const [orientation, setOrientation] = useState<'landscape' | 'portrait'>('landscape');
   const [activeFilter, setActiveFilter] = useState<VideoFilter>('beauty');
   const [brightness, setBrightness] = useState<number>(100);
@@ -180,8 +185,10 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         cameraVideoRef.current.srcObject = stream;
         cameraVideoRef.current.play().catch(() => {});
       }
+      setCameraEnabled(true);
     } catch (err) {
       console.warn('Camera/Mic permission warning:', err);
+      setCameraEnabled(false);
     }
   };
 
@@ -218,24 +225,24 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     }
   };
 
-  // Get Canvas Filter String
+  // Explicit Math-based Filter String for Canvas Context
   const getCanvasFilterString = () => {
-    let f = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
+    let base = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%)`;
     switch (activeFilter) {
       case 'beauty':
-        return `${f} brightness(112%) contrast(108%) saturate(115%)`;
+        return `${base} brightness(115%) contrast(108%) saturate(120%)`;
       case 'cinematic':
-        return `${f} contrast(125%) saturate(130%) hue-rotate(-8deg)`;
+        return `${base} contrast(135%) saturate(135%) hue-rotate(-8deg)`;
       case 'matrix':
-        return `${f} contrast(140%) hue-rotate(90deg) saturate(180%)`;
+        return `${base} contrast(150%) hue-rotate(90deg) saturate(220%)`;
       case 'monochrome':
-        return `${f} grayscale(100%) contrast(120%)`;
+        return `${base} grayscale(100%) contrast(130%)`;
       case 'vibrant':
-        return `${f} saturate(160%) contrast(110%)`;
+        return `${base} saturate(180%) contrast(115%)`;
       case 'sepia':
-        return `${f} sepia(85%) contrast(110%)`;
+        return `${base} sepia(90%) contrast(115%)`;
       default:
-        return f;
+        return base;
     }
   };
 
@@ -257,23 +264,20 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         canvas.height = targetHeight;
       }
 
-      // Background
+      // Fill Background
       ctx.fillStyle = '#030914';
       ctx.fillRect(0, 0, targetWidth, targetHeight);
 
       const hasMedia = !isYoutubeIframe && mediaSourceUrl && mediaVideoRef.current && mediaVideoRef.current.readyState >= 2;
-      const hasCam = cameraVideoRef.current && cameraVideoRef.current.readyState >= 2;
 
       // Layout calculations
       if (orientation === 'landscape') {
         // 16:9 Side-by-Side (50/50)
         const halfWidth = targetWidth / 2;
-
-        // Left Panel
         const leftIsCam = mediaSwapped;
         const rightIsCam = !mediaSwapped;
 
-        // Draw Left
+        // Draw Left Panel
         if (leftIsCam) {
           drawCamera(ctx, 0, 0, halfWidth, targetHeight);
         } else if (hasMedia && mediaVideoRef.current) {
@@ -282,7 +286,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
           drawPlaceholder(ctx, 0, 0, halfWidth, targetHeight, 'Reaction / Reference Video');
         }
 
-        // Draw Right
+        // Draw Right Panel
         if (rightIsCam) {
           drawCamera(ctx, halfWidth, 0, halfWidth, targetHeight);
         } else if (hasMedia && mediaVideoRef.current) {
@@ -291,7 +295,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
           drawPlaceholder(ctx, halfWidth, 0, halfWidth, targetHeight, 'Reaction / Reference Video');
         }
 
-        // Divider
+        // Center Divider Line
         ctx.strokeStyle = '#334155';
         ctx.lineWidth = 4;
         ctx.beginPath();
@@ -302,7 +306,6 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       } else {
         // 9:16 Portrait Top/Bottom (50/50 for TikTok / Reels)
         const halfHeight = targetHeight / 2;
-
         const topIsCam = mediaSwapped;
         const bottomIsCam = !mediaSwapped;
 
@@ -324,7 +327,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
           drawPlaceholder(ctx, 0, halfHeight, targetWidth, halfHeight, 'Reaction / Reference Video');
         }
 
-        // Divider
+        // Center Divider Line
         ctx.strokeStyle = '#334155';
         ctx.lineWidth = 4;
         ctx.beginPath();
@@ -347,18 +350,15 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         const tickerHeight = 56;
         const tickerY = targetHeight - tickerHeight;
 
-        // Ticker background
         ctx.fillStyle = '#dc2626';
         ctx.fillRect(0, tickerY, targetWidth, tickerHeight);
 
-        // LIVE badge
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, tickerY, 140, tickerHeight);
         ctx.fillStyle = '#ffffff';
         ctx.font = 'black 22px "Space Grotesk", sans-serif';
         ctx.fillText('LIVE NEWS', 16, tickerY + 36);
 
-        // Scrolling text
         ctx.save();
         ctx.rect(140, tickerY, targetWidth - 140, tickerHeight);
         ctx.clip();
@@ -378,13 +378,24 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     };
 
     const drawCamera = (context: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => {
-      if (!cameraVideoRef.current || cameraVideoRef.current.readyState < 2) return;
+      if (!cameraVideoRef.current || cameraVideoRef.current.readyState < 2 || !cameraEnabled) {
+        context.save();
+        context.fillStyle = '#050c1e';
+        context.fillRect(x, y, w, h);
+        context.fillStyle = '#94a3b8';
+        context.font = 'bold 22px sans-serif';
+        context.textAlign = 'center';
+        context.fillText('Camera Inactive / Off', x + w / 2, y + h / 2);
+        context.restore();
+        return;
+      }
+
       context.save();
       context.beginPath();
       context.rect(x, y, w, h);
       context.clip();
 
-      // Apply baked-in filters
+      // Apply baked-in filter
       context.filter = getCanvasFilterString();
 
       // Mirror selfie camera
@@ -420,7 +431,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     return () => {
       if (renderAnimIdRef.current) cancelAnimationFrame(renderAnimIdRef.current);
     };
-  }, [orientation, activeFilter, brightness, contrast, saturation, showTicker, tickerText, mediaSwapped, mediaSourceUrl, isYoutubeIframe]);
+  }, [orientation, activeFilter, brightness, contrast, saturation, showTicker, tickerText, mediaSwapped, mediaSourceUrl, isYoutubeIframe, cameraEnabled]);
 
   // Start Canvas + Combined Audio Recording
   const startRecording = async () => {
@@ -428,35 +439,35 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     if (!canvas) return;
 
     try {
-      // 1. Setup Combined Audio (Mic + Media Audio)
+      // 1. Audio Mixer Setup
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const dest = audioCtx.createMediaStreamDestination();
       audioContextRef.current = audioCtx;
       audioDestinationRef.current = dest;
 
-      // Add Microphone if active
+      // Add Microphone if active & not muted
       if (mediaStreamRef.current && mediaStreamRef.current.getAudioTracks().length > 0 && !micMuted) {
         const micSource = audioCtx.createMediaStreamSource(mediaStreamRef.current);
         micSource.connect(dest);
         micSourceRef.current = micSource;
       }
 
-      // Add Media Element Audio if loaded & not muted
+      // Add Media Audio if active & not muted
       if (mediaVideoRef.current && !mediaMuted) {
         try {
           const mediaSource = audioCtx.createMediaElementSource(mediaVideoRef.current);
           mediaSource.connect(dest);
-          mediaSource.connect(audioCtx.destination); // Also send to speakers
+          mediaSource.connect(audioCtx.destination);
           mediaAudioSourceRef.current = mediaSource;
         } catch (e) {
-          // Already connected in some browsers
+          // Ignore if already connected
         }
       }
 
       // 2. Capture 60FPS Video Stream from Canvas
       const canvasStream = canvas.captureStream(60);
 
-      // 3. Combine Video Tracks + Audio Tracks
+      // 3. Combine Tracks
       const combinedStream = new MediaStream([
         ...canvasStream.getVideoTracks(),
         ...dest.stream.getAudioTracks()
@@ -469,7 +480,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
 
       const recorder = new MediaRecorder(combinedStream, {
         mimeType,
-        videoBitsPerSecond: 6000000 // Broadcast-grade 6Mbps
+        videoBitsPerSecond: 6000000
       });
 
       recordedChunksRef.current = [];
@@ -489,7 +500,6 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       setIsRecording(true);
       setRecordingSeconds(0);
 
-      // Auto start prompter & media
       setIsPlaying(true);
       if (mediaVideoRef.current) mediaVideoRef.current.play().catch(() => {});
 
@@ -588,8 +598,10 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         />
       )}
 
-      {/* Studio Header */}
-      <header className="h-14 sm:h-16 px-3 sm:px-4 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between z-30 backdrop-blur-md">
+      {/* TOP STUDIO HARDWARE & CONTROL BAR */}
+      <header className="h-16 px-3 sm:px-4 bg-slate-900/98 border-b border-slate-800 flex items-center justify-between z-30 backdrop-blur-md">
+        
+        {/* Left: Branding & Status */}
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="p-2 bg-gradient-to-br from-red-600 to-rose-600 text-white rounded-xl shadow-md flex items-center justify-center">
             <Radio className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse" />
@@ -601,16 +613,68 @@ export const StudioModal: React.FC<StudioModalProps> = ({
                 {orientation.toUpperCase()} ({orientation === 'portrait' ? '9:16' : '16:9'})
               </span>
             </h1>
-            <p className="text-[10px] text-slate-400 truncate max-w-[180px] sm:max-w-none">
+            <p className="text-[10px] text-slate-400 truncate max-w-[140px] sm:max-w-none">
               Script: <span className="text-amber-300 font-semibold">{scriptTitle || 'Untitled'}</span>
             </p>
           </div>
         </div>
 
-        {/* Action Controls */}
+        {/* Center/Right: Prominent Hardware Audio/Video Toggles */}
         <div className="flex items-center gap-1.5 sm:gap-2">
           
-          {/* Quick Script Drawer */}
+          {/* Microphone Mute Control */}
+          <button
+            onClick={() => setMicMuted(!micMuted)}
+            className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1 text-xs font-semibold transition-all ${
+              micMuted 
+                ? 'bg-red-950/80 border-red-500/80 text-red-300' 
+                : 'bg-emerald-950/60 border-emerald-500/60 text-emerald-300'
+            }`}
+            title={micMuted ? 'Click to Unmute Microphone' : 'Click to Mute Microphone'}
+          >
+            {micMuted ? <MicOff className="w-3.5 h-3.5 text-red-400" /> : <Mic className="w-3.5 h-3.5 text-emerald-400" />}
+            <span className="hidden md:inline">{micMuted ? 'Mic: MUTED' : 'Mic: ON'}</span>
+          </button>
+
+          {/* Speaker / Reference Video Sound Control */}
+          <button
+            onClick={() => setMediaMuted(!mediaMuted)}
+            className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1 text-xs font-semibold transition-all ${
+              mediaMuted 
+                ? 'bg-red-950/80 border-red-500/80 text-red-300' 
+                : 'bg-cyan-950/60 border-cyan-500/60 text-cyan-300'
+            }`}
+            title={mediaMuted ? 'Click to Unmute Reference Sound' : 'Click to Mute Reference Sound'}
+          >
+            {mediaMuted ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
+            <span className="hidden md:inline">{mediaMuted ? 'Video Audio: MUTED' : 'Video Audio: ON'}</span>
+          </button>
+
+          {/* Camera On/Off Toggle */}
+          <button
+            onClick={() => setCameraEnabled(!cameraEnabled)}
+            className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1 text-xs font-semibold transition-all ${
+              !cameraEnabled 
+                ? 'bg-red-950/80 border-red-500/80 text-red-300' 
+                : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
+            }`}
+            title={cameraEnabled ? 'Turn Off Camera' : 'Turn On Camera'}
+          >
+            {!cameraEnabled ? <VideoOff className="w-3.5 h-3.5 text-red-400" /> : <Camera className="w-3.5 h-3.5 text-amber-400" />}
+            <span className="hidden lg:inline">{cameraEnabled ? 'Camera: ON' : 'Camera: OFF'}</span>
+          </button>
+
+          {/* Orientation Switcher */}
+          <button
+            onClick={() => setOrientation(orientation === 'portrait' ? 'landscape' : 'portrait')}
+            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 flex items-center gap-1 text-xs font-semibold transition-colors"
+            title={`Switch to ${orientation === 'portrait' ? 'Landscape (16:9)' : 'Portrait (9:16)'}`}
+          >
+            {orientation === 'portrait' ? <Smartphone className="w-3.5 h-3.5 text-amber-400" /> : <Monitor className="w-3.5 h-3.5 text-cyan-400" />}
+            <span className="hidden xs:inline">{orientation === 'portrait' ? '9:16' : '16:9'}</span>
+          </button>
+
+          {/* Edit Script Drawer */}
           <button
             onClick={() => setShowScriptDrawer(!showScriptDrawer)}
             className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all ${
@@ -618,50 +682,10 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             }`}
           >
             <Edit3 className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">Edit Text</span>
+            <span className="hidden sm:inline">Script</span>
           </button>
 
-          {/* Orientation Switcher */}
-          <button
-            onClick={() => setOrientation(orientation === 'portrait' ? 'landscape' : 'portrait')}
-            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 flex items-center gap-1.5 transition-colors text-xs font-semibold"
-            title={`Switch to ${orientation === 'portrait' ? 'Landscape (16:9)' : 'Portrait (9:16)'}`}
-          >
-            {orientation === 'portrait' ? <Smartphone className="w-3.5 h-3.5 text-amber-400" /> : <Monitor className="w-3.5 h-3.5 text-cyan-400" />}
-            <span className="hidden sm:inline">{orientation === 'portrait' ? 'Portrait (9:16)' : 'Landscape (16:9)'}</span>
-          </button>
-
-          {/* Mic Toggle */}
-          <button
-            onClick={() => setMicMuted(!micMuted)}
-            className={`p-1.5 sm:p-2 rounded-xl border transition-colors ${
-              micMuted ? 'bg-red-950/80 border-red-500/60 text-red-400' : 'bg-slate-800 border-slate-700 text-emerald-400'
-            }`}
-            title={micMuted ? 'Unmute Microphone' : 'Mute Microphone'}
-          >
-            {micMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-          </button>
-
-          {/* Media Audio Toggle */}
-          <button
-            onClick={() => setMediaMuted(!mediaMuted)}
-            className={`p-1.5 sm:p-2 rounded-xl border transition-colors ${
-              mediaMuted ? 'bg-red-950/80 border-red-500/60 text-red-400' : 'bg-slate-800 border-slate-700 text-cyan-400'
-            }`}
-            title={mediaMuted ? 'Unmute Reference Video' : 'Mute Reference Video'}
-          >
-            {mediaMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-          </button>
-
-          {/* Help Instructions */}
-          <button
-            onClick={() => setShowInstructions(!showInstructions)}
-            className="p-1.5 sm:p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
-          >
-            <HelpCircle className="w-4 h-4" />
-          </button>
-
-          {/* Close */}
+          {/* Close Studio */}
           <button
             onClick={onClose}
             className="p-1.5 sm:p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
@@ -671,26 +695,12 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         </div>
       </header>
 
-      {/* Instructions */}
-      {showInstructions && (
-        <div className="bg-slate-900 border-b border-amber-500/30 p-3 text-xs text-slate-300 z-40">
-          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row gap-2 justify-between items-center">
-            <p>
-              🎬 <strong>How to record:</strong> 1. Paste link or upload local video below. 2. Choose filters & orientation. 3. Tap <strong>START RECORDING</strong>. The canvas automatically records your camera + reference video + filters + live ticker into a single final video!
-            </p>
-            <button onClick={() => setShowInstructions(false)} className="px-3 py-1 bg-slate-800 rounded-lg text-xs font-bold">
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Script Drawer */}
       {showScriptDrawer && (
         <div className="bg-slate-900/98 border-b border-slate-700 p-3 z-40 flex flex-col gap-2 max-h-[30vh] overflow-y-auto">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold text-amber-300">Live Teleprompter Text:</span>
-            <span>Edits update immediately</span>
+            <span>Edits update immediately in the prompter</span>
           </div>
           <textarea
             value={scriptContent}
@@ -701,16 +711,16 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         </div>
       )}
 
-      {/* Media Input Link Bar */}
-      <div className="bg-slate-900/80 border-b border-slate-800 px-3 py-2 flex flex-wrap items-center gap-2 text-xs z-20">
+      {/* Media Input Link & Upload Bar */}
+      <div className="bg-slate-900/90 border-b border-slate-800 px-3 py-2 flex flex-wrap items-center gap-2 text-xs z-20">
         <span className="text-slate-400 font-bold flex items-center gap-1">
           <Link className="w-3.5 h-3.5 text-amber-400" />
-          <span>Load Video / Link:</span>
+          <span>Reference Video / Reaction Link:</span>
         </span>
         <div className="flex-1 flex gap-1.5 min-w-[220px]">
           <input
             type="text"
-            placeholder="Paste YouTube, Facebook video, or MP4 URL..."
+            placeholder="Paste YouTube link, Facebook video, or MP4 URL..."
             value={onlineInputUrl}
             onChange={(e) => setOnlineInputUrl(e.target.value)}
             className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none focus:border-amber-400"
@@ -719,7 +729,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             onClick={handleApplyOnlineUrl}
             className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl"
           >
-            Load
+            Load Link
           </button>
         </div>
         <label className="px-3 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl cursor-pointer text-slate-200 flex items-center gap-1">
@@ -729,7 +739,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         </label>
       </div>
 
-      {/* Main Studio Compositor & Stage */}
+      {/* Main Studio Compositor Stage */}
       <main className="flex-1 relative flex items-center justify-center bg-black overflow-hidden p-2">
         
         {/* The Live 60FPS Composited Canvas (This is what gets recorded with baked-in filters & split screen) */}
@@ -754,7 +764,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
                 {scriptTitle || 'Untitled'}
               </h2>
               <div className="font-bold text-white leading-relaxed drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] whitespace-pre-wrap text-sm sm:text-base">
-                {scriptContent || 'Click "Edit Text" to add your script.'}
+                {scriptContent || 'Click "Script" at the top to add your text.'}
               </div>
             </div>
           </div>
@@ -780,14 +790,14 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         
         {/* Floating Reactions */}
         <div className="bg-slate-900/90 border border-slate-700/80 backdrop-blur-xl px-2 py-1.5 rounded-2xl flex items-center gap-1 shadow-2xl">
-          <button onClick={() => triggerEmoji('🎈')} className="p-1 text-base hover:scale-125 transition-transform">🎈</button>
-          <button onClick={() => triggerEmoji('👍')} className="p-1 text-base hover:scale-125 transition-transform">👍</button>
-          <button onClick={() => triggerEmoji('🔥')} className="p-1 text-base hover:scale-125 transition-transform">🔥</button>
-          <button onClick={() => triggerEmoji('💖')} className="p-1 text-base hover:scale-125 transition-transform">💖</button>
-          <button onClick={() => triggerEmoji('🎉')} className="p-1 text-base hover:scale-125 transition-transform">🎉</button>
+          <button onClick={() => triggerEmoji('🎈')} className="p-1 text-base hover:scale-125 transition-transform" title="Balloons">🎈</button>
+          <button onClick={() => triggerEmoji('👍')} className="p-1 text-base hover:scale-125 transition-transform" title="Thumbs Up">👍</button>
+          <button onClick={() => triggerEmoji('🔥')} className="p-1 text-base hover:scale-125 transition-transform" title="Fire">🔥</button>
+          <button onClick={() => triggerEmoji('💖')} className="p-1 text-base hover:scale-125 transition-transform" title="Heart">💖</button>
+          <button onClick={() => triggerEmoji('🎉')} className="p-1 text-base hover:scale-125 transition-transform" title="Party">🎉</button>
         </div>
 
-        {/* Record Trigger */}
+        {/* Master Record Trigger */}
         {isRecording ? (
           <button
             onClick={stopRecording}
@@ -816,29 +826,66 @@ export const StudioModal: React.FC<StudioModalProps> = ({
 
       </div>
 
-      {/* Bottom Toolbelt with Working Baked-in Filters */}
-      <footer className="h-14 sm:h-16 px-3 sm:px-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between text-xs text-slate-300 z-30">
+      {/* Bottom Toolbelt with Baked-in Filters (Beauty Glow, Matrix Cyber, Cinematic Film) */}
+      <footer className="h-16 px-3 sm:px-4 bg-slate-900 border-t border-slate-800 flex items-center justify-between text-xs text-slate-300 z-30">
         
-        {/* Filters */}
+        {/* Filters Bar */}
         <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none max-w-[55vw] sm:max-w-none">
           <span className="text-slate-500 font-bold text-[10px] uppercase hidden sm:inline">Filters:</span>
-          {(['beauty', 'cinematic', 'matrix', 'monochrome', 'vibrant', 'none'] as VideoFilter[]).map(f => (
-            <button
-              key={f}
-              onClick={() => setActiveFilter(f)}
-              className={`px-2.5 py-1 rounded-xl capitalize font-semibold transition-all shrink-0 text-[11px] sm:text-xs ${
-                activeFilter === f
-                  ? 'bg-cyan-500 text-slate-950 font-bold shadow-md'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-              }`}
-            >
-              {f === 'beauty' ? '✨ Beauty' : f === 'matrix' ? '🟩 Matrix' : f}
-            </button>
-          ))}
+          
+          <button
+            onClick={() => setActiveFilter('beauty')}
+            className={`px-2.5 py-1 rounded-xl font-bold transition-all shrink-0 text-[11px] sm:text-xs flex items-center gap-1 ${
+              activeFilter === 'beauty' ? 'bg-amber-400 text-slate-950 shadow-md' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-pink-400" />
+            <span>Beauty Glow</span>
+          </button>
+
+          <button
+            onClick={() => setActiveFilter('matrix')}
+            className={`px-2.5 py-1 rounded-xl font-bold transition-all shrink-0 text-[11px] sm:text-xs flex items-center gap-1 ${
+              activeFilter === 'matrix' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+            }`}
+          >
+            <span className="text-emerald-400">🟩</span>
+            <span>Matrix Cyber</span>
+          </button>
+
+          <button
+            onClick={() => setActiveFilter('cinematic')}
+            className={`px-2.5 py-1 rounded-xl font-bold transition-all shrink-0 text-[11px] sm:text-xs flex items-center gap-1 ${
+              activeFilter === 'cinematic' ? 'bg-cyan-500 text-slate-950 shadow-md' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+            }`}
+          >
+            <Film className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Cinematic Film</span>
+          </button>
+
+          <button
+            onClick={() => setActiveFilter('monochrome')}
+            className={`px-2.5 py-1 rounded-xl font-bold transition-all shrink-0 text-[11px] sm:text-xs ${
+              activeFilter === 'monochrome' ? 'bg-slate-200 text-slate-950 shadow-md' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+            }`}
+          >
+            Monochrome
+          </button>
+
+          <button
+            onClick={() => setActiveFilter('none')}
+            className={`px-2.5 py-1 rounded-xl font-bold transition-all shrink-0 text-[11px] sm:text-xs ${
+              activeFilter === 'none' ? 'bg-slate-700 text-white' : 'bg-slate-800/60 text-slate-400'
+            }`}
+          >
+            Normal (No Filter)
+          </button>
         </div>
 
-        {/* Lighting, Swap & Speed */}
+        {/* Lighting, Swap & Speed Controls */}
         <div className="flex items-center gap-2">
+          
+          {/* Lighting / Sun Slider */}
           <div className="hidden sm:flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-700">
             <Sun className="w-3.5 h-3.5 text-amber-400" />
             <input
@@ -848,19 +895,21 @@ export const StudioModal: React.FC<StudioModalProps> = ({
               value={brightness}
               onChange={(e) => setBrightness(Number(e.target.value))}
               className="w-16 accent-amber-400 cursor-pointer h-1.5 bg-slate-700 rounded-lg"
-              title="Lighting"
+              title="Camera Lighting Brightness"
             />
           </div>
 
+          {/* Swap Panels */}
           <button
             onClick={() => setMediaSwapped(!mediaSwapped)}
             className="p-1.5 sm:p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 flex items-center gap-1 transition-colors text-[11px]"
-            title="Swap Panels"
+            title="Swap Panels (Left/Right or Top/Bottom)"
           >
             <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden sm:inline">Swap</span>
           </button>
 
+          {/* Speed Slider */}
           <div className="flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-700">
             <span className="text-[10px] text-slate-400 font-mono">SPD:{speed}</span>
             <input
