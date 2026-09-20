@@ -40,7 +40,9 @@ import {
   FileVideo,
   FileAudio,
   ShieldCheck,
-  Zap
+  Zap,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { getSupportedVideoMimeType, sanitizeFileName } from '../utils/mediaExport';
@@ -75,13 +77,14 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [scriptContent, setScriptContent] = useState(script.content);
   const [showScriptDrawer, setShowScriptDrawer] = useState(false);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
+  const [showReferenceBar, setShowReferenceBar] = useState(false);
 
   // Studio Layout Mode (Solo Camera, Split, PiP, Solo Media)
   const [layoutMode, setLayoutMode] = useState<StudioLayoutMode>('solo-camera');
 
-  // Custom File Name
+  // Custom File Name & Output Format
   const [customFileName, setCustomFileName] = useState<string>(
-    sanitizeFileName(script.title ? script.title.replace(/[^\w\s-]/gi, '') : 'studio_take')
+    sanitizeFileName(script.title ? script.title.replace(/[^\w\s-]/gi, '') : 'my_studio_take')
   );
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('mp4');
 
@@ -91,7 +94,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [isYoutubeIframe, setIsYoutubeIframe] = useState<boolean>(false);
   const [youtubeEmbedId, setYoutubeEmbedId] = useState<string>('');
 
-  // Audio Volume Sliders & Mute Controls (For both desktop & mobile)
+  // Audio Volume Sliders & Mute Controls
   const [micVolume, setMicVolume] = useState<number>(1);
   const [mediaVolume, setMediaVolume] = useState<number>(1);
   const [micMuted, setMicMuted] = useState<boolean>(false);
@@ -104,7 +107,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [brightness, setBrightness] = useState<number>(100);
 
   // Custom Logo, Watermark & News Ticker Text Customization
-  const [showLogo, setShowLogo] = useState<boolean>(false); // Clean feed by default or toggleable
+  const [showLogo, setShowLogo] = useState<boolean>(false); // Clean feed (NO LOGO) by default
   const [customLogoUrl, setCustomLogoUrl] = useState<string>('/debzane-logo.jpg');
   const [customLogoText, setCustomLogoText] = useState<string>('STUDIO');
   const [showTicker, setShowTicker] = useState<boolean>(false);
@@ -143,7 +146,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   useEffect(() => {
     setScriptTitle(script.title);
     setScriptContent(script.content);
-    setCustomFileName(sanitizeFileName(script.title || 'studio_take'));
+    setCustomFileName(sanitizeFileName(script.title || 'my_studio_take'));
   }, [script.id, script.title, script.content]);
 
   // Pre-load custom logo image
@@ -200,7 +203,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     setShowLogo(true);
   };
 
-  // Start Camera with high compatibility for Desktop, Tablets & Mobile phones
+  // Start Camera
   const startCamera = async () => {
     try {
       if (mediaStreamRef.current) {
@@ -688,112 +691,54 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       )}
 
       {/* TOP STUDIO HARDWARE & CONTROL BAR */}
-      <header className="h-16 px-3 sm:px-4 bg-slate-900/98 border-b border-slate-800 flex items-center justify-between z-30 backdrop-blur-md">
+      <header className="h-14 sm:h-16 px-2.5 sm:px-4 bg-slate-900/98 border-b border-slate-800 flex items-center justify-between z-30 backdrop-blur-md">
         
-        {/* Left: Branding, Take Name & Layout Modes */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="p-2 bg-gradient-to-br from-red-600 to-rose-600 text-white rounded-xl shadow-md flex items-center justify-center">
+        {/* Left: Branding & Status */}
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 sm:p-2 bg-gradient-to-br from-red-600 to-rose-600 text-white rounded-xl shadow-md flex items-center justify-center">
             <Radio className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse" />
           </div>
           
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-heading font-black text-xs sm:text-sm tracking-wide text-white">
-                VIDEO STUDIO
-              </h1>
-              
-              {/* Layout Mode Badge Switcher */}
-              <div className="hidden sm:flex items-center gap-1 bg-slate-950 px-1.5 py-0.5 rounded-lg border border-slate-800 text-[11px]">
-                <button
-                  onClick={() => setLayoutMode('solo-camera')}
-                  className={`px-2 py-0.5 rounded-md font-bold transition-all flex items-center gap-1 ${
-                    layoutMode === 'solo-camera' ? 'bg-amber-400 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
-                  }`}
-                  title="Solo Camera (Record myself full-screen, no reference video needed)"
-                >
-                  <User className="w-3 h-3" />
-                  <span>Solo Camera</span>
-                </button>
-
-                <button
-                  onClick={() => setLayoutMode('split')}
-                  className={`px-2 py-0.5 rounded-md font-bold transition-all flex items-center gap-1 ${
-                    layoutMode === 'split' ? 'bg-cyan-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
-                  }`}
-                  title="Split Studio (50/50 Side-by-Side)"
-                >
-                  <Split className="w-3 h-3" />
-                  <span>Split</span>
-                </button>
-
-                <button
-                  onClick={() => setLayoutMode('pip')}
-                  className={`px-2 py-0.5 rounded-md font-bold transition-all flex items-center gap-1 ${
-                    layoutMode === 'pip' ? 'bg-purple-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
-                  }`}
-                  title="Picture-in-Picture Floating Camera"
-                >
-                  <Layers className="w-3 h-3" />
-                  <span>PiP</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-              <span>File:</span>
-              <input
-                type="text"
-                value={customFileName}
-                onChange={(e) => setCustomFileName(e.target.value)}
-                placeholder="Name your video take..."
-                className="bg-transparent border-b border-slate-700 text-amber-300 font-bold focus:outline-none focus:border-amber-400 text-[11px] max-w-[140px] sm:max-w-[180px]"
-                title="Click to rename this video file before saving"
-              />
-              <span className="text-slate-500 font-mono">.{selectedFormat}</span>
-            </div>
+            <h1 className="font-heading font-black text-xs sm:text-sm tracking-wide text-white flex items-center gap-1.5">
+              <span>STUDIO</span>
+              <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.2 rounded font-mono">
+                {orientation === 'portrait' ? '9:16' : '16:9'}
+              </span>
+            </h1>
+            <p className="text-[10px] text-slate-400 truncate max-w-[100px] sm:max-w-[160px]">
+              {scriptTitle || 'Take 1'}
+            </p>
           </div>
         </div>
 
-        {/* Center/Right: Audio/Video Toggles */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        {/* Center/Right: Audio/Video & Drawer Toggles */}
+        <div className="flex items-center gap-1.5">
           
-          {/* Format Selector Badge */}
-          <select
-            value={selectedFormat}
-            onChange={(e) => setSelectedFormat(e.target.value as ExportFormat)}
-            className="bg-slate-800 border border-slate-700 text-amber-300 font-mono font-bold text-xs rounded-xl px-2 py-1.5 focus:outline-none"
-            title="Choose default save format (MP4, WebM, MP3, WAV)"
-          >
-            <option value="mp4">MP4 (Universal)</option>
-            <option value="webm">WebM</option>
-            <option value="mp3">MP3 (Audio)</option>
-            <option value="wav">WAV (Lossless)</option>
-          </select>
-
           {/* Microphone Mute Control */}
           <button
             onClick={() => setMicMuted(!micMuted)}
-            className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1 text-xs font-semibold transition-all ${
+            className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border flex items-center gap-1 text-xs font-semibold transition-all ${
               micMuted 
                 ? 'bg-red-950/80 border-red-500/80 text-red-300' 
                 : 'bg-emerald-950/60 border-emerald-500/60 text-emerald-300'
             }`}
-            title={micMuted ? 'Click to Unmute Microphone' : 'Click to Mute Microphone'}
+            title={micMuted ? 'Click to Unmute Mic' : 'Click to Mute Mic'}
           >
             {micMuted ? <MicOff className="w-3.5 h-3.5 text-red-400" /> : <Mic className="w-3.5 h-3.5 text-emerald-400" />}
             <span className="hidden md:inline">{micMuted ? 'Mic: OFF' : 'Mic: ON'}</span>
           </button>
 
-          {/* Reference Video Sound Control (If in split/pip mode) */}
+          {/* Reference Video Sound Control (In split/pip mode) */}
           {layoutMode !== 'solo-camera' && (
             <button
               onClick={() => setMediaMuted(!mediaMuted)}
-              className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1 text-xs font-semibold transition-all ${
+              className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border flex items-center gap-1 text-xs font-semibold transition-all ${
                 mediaMuted 
                   ? 'bg-red-950/80 border-red-500/80 text-red-300' 
                   : 'bg-cyan-950/60 border-cyan-500/60 text-cyan-300'
               }`}
-              title={mediaMuted ? 'Click to Unmute Reference Sound' : 'Click to Mute Reference Sound'}
+              title={mediaMuted ? 'Click to Unmute Media' : 'Click to Mute Media'}
             >
               {mediaMuted ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
               <span className="hidden md:inline">{mediaMuted ? 'Media: OFF' : 'Media: ON'}</span>
@@ -803,17 +748,17 @@ export const StudioModal: React.FC<StudioModalProps> = ({
           {/* Orientation Switcher */}
           <button
             onClick={() => setOrientation(orientation === 'portrait' ? 'landscape' : 'portrait')}
-            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 flex items-center gap-1 text-xs font-semibold transition-colors"
+            className="p-1.5 sm:px-2.5 sm:py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 flex items-center gap-1 text-xs font-semibold transition-colors"
             title={`Switch to ${orientation === 'portrait' ? 'Landscape (16:9)' : 'Portrait (9:16)'}`}
           >
             {orientation === 'portrait' ? <Smartphone className="w-3.5 h-3.5 text-amber-400" /> : <Monitor className="w-3.5 h-3.5 text-cyan-400" />}
-            <span className="hidden xs:inline">{orientation === 'portrait' ? '9:16' : '16:9'}</span>
+            <span className="hidden sm:inline">{orientation === 'portrait' ? 'Portrait 9:16' : 'Landscape 16:9'}</span>
           </button>
 
-          {/* Branding & Ticker Drawer */}
+          {/* Branding & Watermark Drawer */}
           <button
             onClick={() => setShowSettingsDrawer(!showSettingsDrawer)}
-            className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all ${
+            className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all ${
               showSettingsDrawer ? 'bg-cyan-500 text-slate-950 border-cyan-400' : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
             }`}
             title="Custom Logo & Watermark Settings"
@@ -825,7 +770,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
           {/* Script Drawer */}
           <button
             onClick={() => setShowScriptDrawer(!showScriptDrawer)}
-            className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all ${
+            className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all ${
               showScriptDrawer ? 'bg-amber-400 text-slate-950 border-amber-300' : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
             }`}
           >
@@ -836,12 +781,132 @@ export const StudioModal: React.FC<StudioModalProps> = ({
           {/* Close Studio */}
           <button
             onClick={onClose}
-            className="p-1.5 sm:p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+            className="p-1.5 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
       </header>
+
+      {/* DEDICATED MOBILE & DESKTOP STUDIO MODE & FORMAT BAR */}
+      <div className="bg-slate-900/95 border-b border-slate-800 px-2.5 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 z-30">
+        
+        {/* 1. Layout Mode Switcher (Prominent on all screens!) */}
+        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+          <button
+            onClick={() => setLayoutMode('solo-camera')}
+            className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+              layoutMode === 'solo-camera'
+                ? 'bg-amber-400 text-slate-950 shadow-md scale-102'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+            title="Record myself full-screen with teleprompter"
+          >
+            <User className="w-3.5 h-3.5" />
+            <span>Solo Camera</span>
+          </button>
+
+          <button
+            onClick={() => { setLayoutMode('split'); setShowReferenceBar(true); }}
+            className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+              layoutMode === 'split'
+                ? 'bg-cyan-500 text-slate-950 shadow-md scale-102'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+            title="Split screen 50/50 for reaction video"
+          >
+            <Split className="w-3.5 h-3.5" />
+            <span>Split 50/50</span>
+          </button>
+
+          <button
+            onClick={() => { setLayoutMode('pip'); setShowReferenceBar(true); }}
+            className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+              layoutMode === 'pip'
+                ? 'bg-purple-500 text-slate-950 shadow-md scale-102'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+            title="Picture-in-Picture floating camera"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>PiP</span>
+          </button>
+        </div>
+
+        {/* 2. Output Format Selector & Custom File Name */}
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          
+          {/* Format Selector Pills */}
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <span className="text-[10px] text-slate-500 font-bold px-1 hidden xs:inline">FORMAT:</span>
+            {(['mp4', 'webm', 'mp3', 'wav'] as const).map((fmt) => (
+              <button
+                key={fmt}
+                onClick={() => setSelectedFormat(fmt)}
+                className={`px-2 py-0.5 rounded-md font-mono font-bold text-[11px] uppercase transition-all ${
+                  selectedFormat === fmt
+                    ? 'bg-emerald-500 text-slate-950 shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title={`Export as .${fmt}`}
+              >
+                .{fmt}
+              </button>
+            ))}
+          </div>
+
+          {/* Custom File Name */}
+          <div className="flex items-center gap-1 bg-slate-950 px-2 py-1 rounded-xl border border-slate-800">
+            <span className="text-[10px] text-slate-400">Name:</span>
+            <input
+              type="text"
+              value={customFileName}
+              onChange={(e) => setCustomFileName(e.target.value)}
+              placeholder="Name your file..."
+              className="bg-transparent text-amber-300 font-bold text-xs font-mono focus:outline-none max-w-[110px] sm:max-w-[150px]"
+            />
+          </div>
+
+          {/* Reference Video Bar Toggle (In Split / PiP mode) */}
+          {layoutMode !== 'solo-camera' && (
+            <button
+              onClick={() => setShowReferenceBar(!showReferenceBar)}
+              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl border border-slate-700 flex items-center gap-1 text-[11px]"
+            >
+              <Youtube className="w-3 h-3 text-red-400" />
+              <span>{showReferenceBar ? 'Hide Video Link' : 'Load Video Link'}</span>
+            </button>
+          )}
+
+        </div>
+
+      </div>
+
+      {/* Reference Video Loader (Shown when in Split/PiP or toggled) */}
+      {showReferenceBar && layoutMode !== 'solo-camera' && (
+        <div className="bg-slate-900/90 border-b border-slate-800 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs z-20 animate-in slide-in-from-top-1">
+          <div className="flex-1 flex items-center gap-1.5 min-w-[280px]">
+            <input
+              type="text"
+              placeholder="Paste YouTube link (watch/shorts/youtu.be) or MP4 URL..."
+              value={onlineInputUrl}
+              onChange={(e) => setOnlineInputUrl(e.target.value)}
+              className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none focus:border-cyan-400"
+            />
+            <button
+              onClick={handleApplyOnlineUrl}
+              className="px-3 py-1 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl"
+            >
+              Load Video
+            </button>
+            <label className="px-3 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl cursor-pointer text-slate-200 flex items-center gap-1">
+              <Upload className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Upload</span>
+              <input type="file" accept="video/*,audio/*" onChange={handleFileUpload} className="hidden" />
+            </label>
+          </div>
+        </div>
+      )}
 
       {/* Branding & Watermark Settings Drawer */}
       {showSettingsDrawer && (
@@ -930,72 +995,6 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         </div>
       )}
 
-      {/* Media Input Link & Upload Bar (Only shown when not strictly solo camera or if user wants reference) */}
-      <div className="bg-slate-900/90 border-b border-slate-800 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs z-20">
-        
-        {/* URL Input */}
-        <div className="flex-1 flex items-center gap-1.5 min-w-[280px]">
-          <span className="text-slate-400 font-bold hidden sm:inline flex items-center gap-1">
-            <Link className="w-3.5 h-3.5 text-amber-400" />
-            <span>Reference Media:</span>
-          </span>
-          <input
-            type="text"
-            placeholder="Paste YouTube (watch/shorts/youtu.be) or MP4 link (Optional)..."
-            value={onlineInputUrl}
-            onChange={(e) => setOnlineInputUrl(e.target.value)}
-            className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none focus:border-amber-400"
-          />
-          <button
-            onClick={handleApplyOnlineUrl}
-            className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl"
-          >
-            Load
-          </button>
-          <label className="px-3 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl cursor-pointer text-slate-200 flex items-center gap-1">
-            <Upload className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden sm:inline">Upload Video</span>
-            <input type="file" accept="video/*,audio/*" onChange={handleFileUpload} className="hidden" />
-          </label>
-        </div>
-
-        {/* Real-time Volume Sliders for Desktop & Mobile */}
-        <div className="flex items-center gap-3 bg-slate-950/80 px-3 py-1 rounded-xl border border-slate-800">
-          
-          {/* Mic Volume */}
-          <div className="flex items-center gap-1.5" title="Microphone Volume">
-            <Mic className="w-3.5 h-3.5 text-emerald-400" />
-            <input
-              type="range"
-              min={0}
-              max={2}
-              step={0.1}
-              value={micVolume}
-              onChange={(e) => setMicVolume(Number(e.target.value))}
-              className="w-14 sm:w-16 accent-emerald-400 cursor-pointer h-1.5 bg-slate-700 rounded-lg"
-            />
-          </div>
-
-          {/* Video Audio Volume */}
-          {layoutMode !== 'solo-camera' && (
-            <div className="flex items-center gap-1.5" title="Reference Video Sound Volume">
-              <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
-              <input
-                type="range"
-                min={0}
-                max={2}
-                step={0.1}
-                value={mediaVolume}
-                onChange={(e) => setMediaVolume(Number(e.target.value))}
-                className="w-14 sm:w-16 accent-cyan-400 cursor-pointer h-1.5 bg-slate-700 rounded-lg"
-              />
-            </div>
-          )}
-
-        </div>
-
-      </div>
-
       {/* Main Studio Compositor Stage */}
       <main className="flex-1 relative flex items-center justify-center bg-black overflow-hidden p-2">
         
@@ -1007,7 +1006,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             className="w-full h-full object-contain"
           />
 
-          {/* YouTube Embed Player Layer (If YouTube URL is loaded in split/pip mode) */}
+          {/* YouTube Embed Player Layer (In split/pip mode) */}
           {isYoutubeIframe && youtubeEmbedId && layoutMode !== 'solo-camera' && (
             <div 
               className={`absolute z-10 overflow-hidden ${

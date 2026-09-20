@@ -73,6 +73,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="px-1.5 py-0.5 text-[9px] uppercase font-black tracking-wider rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30">
                 PROMPTER
               </span>
+              <span className="hidden md:inline px-1.5 py-0.5 text-[9px] font-mono font-bold rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                v1.2.0 Multi-Format
+              </span>
             </div>
             <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-slate-400">
               <span className="text-slate-300 font-medium">Debzane Concepts</span>
