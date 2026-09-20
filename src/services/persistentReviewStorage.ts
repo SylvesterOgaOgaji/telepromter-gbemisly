@@ -134,6 +134,19 @@ export async function getPersistentReviews(): Promise<FeedbackComment[]> {
     }
   } catch (e) {}
 
+  // Check Cloudflare serverless API if online
+  try {
+    const res = await fetch('/api/feedback');
+    if (res.ok) {
+      const cloudData = await res.json();
+      if (Array.isArray(cloudData) && cloudData.length > 0) {
+        saveAllToIndexedDB(cloudData).catch(() => {});
+        try { localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cloudData)); } catch (e) {}
+        return cloudData;
+      }
+    }
+  } catch (e) {}
+
   // Fallback 2: Initialize default community reviews into persistent storage
   await saveAllToIndexedDB(INITIAL_COMMUNITY_REVIEWS);
   try {
@@ -175,7 +188,16 @@ export async function addPersistentReview(review: Omit<FeedbackComment, 'id' | '
     date: new Date().toISOString().split('T')[0]
   };
 
-  // 1. Write to IndexedDB
+  // 1. Post to Cloudflare serverless API
+  try {
+    fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newEntry)
+    }).catch(() => {});
+  } catch (e) {}
+
+  // 2. Write to IndexedDB
   try {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -185,7 +207,7 @@ export async function addPersistentReview(review: Omit<FeedbackComment, 'id' | '
     console.warn('Failed writing review to IndexedDB:', e);
   }
 
-  // 2. Mirror into LocalStorage backup
+  // 3. Mirror into LocalStorage backup
   try {
     const existing = await getPersistentReviews();
     const updated = [newEntry, ...existing.filter(r => r.id !== newEntry.id)];
