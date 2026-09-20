@@ -42,7 +42,8 @@ import {
   ShieldCheck,
   Zap,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  SlidersHorizontal
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { getSupportedVideoMimeType, sanitizeFileName } from '../utils/mediaExport';
@@ -78,9 +79,10 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [showScriptDrawer, setShowScriptDrawer] = useState(false);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [showReferenceBar, setShowReferenceBar] = useState(false);
+  const [showVolumeMixerHUD, setShowVolumeMixerHUD] = useState(true);
 
   // Studio Layout Mode (Solo Camera, Split, PiP, Solo Media)
-  const [layoutMode, setLayoutMode] = useState<StudioLayoutMode>('solo-camera');
+  const [layoutMode, setLayoutMode] = useState<StudioLayoutMode>('split');
 
   // Custom File Name & Output Format
   const [customFileName, setCustomFileName] = useState<string>(
@@ -94,9 +96,9 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [isYoutubeIframe, setIsYoutubeIframe] = useState<boolean>(false);
   const [youtubeEmbedId, setYoutubeEmbedId] = useState<string>('');
 
-  // Audio Volume Sliders & Mute Controls
-  const [micVolume, setMicVolume] = useState<number>(1);
-  const [mediaVolume, setMediaVolume] = useState<number>(1);
+  // Audio Volume Sliders & Mute Controls (0 to 200%)
+  const [micVolume, setMicVolume] = useState<number>(1.2); // Default 120% mic boost
+  const [mediaVolume, setMediaVolume] = useState<number>(0.4); // Default 40% video sound for clear speech
   const [micMuted, setMicMuted] = useState<boolean>(false);
   const [mediaMuted, setMediaMuted] = useState<boolean>(false);
   const [cameraEnabled, setCameraEnabled] = useState<boolean>(true);
@@ -266,23 +268,46 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     }
   };
 
-  // Update real-time audio volume gains
+  // Real-time audio volume gains for Microphone
   useEffect(() => {
     if (micGainNodeRef.current) {
       micGainNodeRef.current.gain.value = micMuted ? 0 : micVolume;
     }
   }, [micVolume, micMuted]);
 
+  // Real-time audio volume gains for Video & YouTube iframe
   useEffect(() => {
+    // 1. Web Audio GainNode (for composite stream)
     if (mediaGainNodeRef.current) {
       mediaGainNodeRef.current.gain.value = mediaMuted ? 0 : mediaVolume;
     }
+
+    // 2. HTML5 Video Player volume
     if (mediaVideoRef.current) {
-      mediaVideoRef.current.volume = mediaMuted ? 0 : mediaVolume;
+      mediaVideoRef.current.volume = mediaMuted ? 0 : Math.min(1, Math.max(0, mediaVolume));
     }
+
+    // 3. YouTube Embed Iframe postMessage control
+    try {
+      const iframe = document.querySelector('iframe[title="YouTube Reference Player"]') as HTMLIFrameElement;
+      if (iframe && iframe.contentWindow) {
+        const targetVol = mediaMuted ? 0 : Math.round(Math.min(1, mediaVolume) * 100);
+        iframe.contentWindow.postMessage(JSON.stringify({
+          event: 'command',
+          func: 'setVolume',
+          args: [targetVol]
+        }), '*');
+
+        if (mediaMuted || targetVol === 0) {
+          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'mute' }), '*');
+        } else {
+          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'unMute' }), '*');
+        }
+      }
+    } catch (e) {}
   }, [mediaVolume, mediaMuted]);
 
-  // Explicit Math-based Filter String for Canvas Context
+  // Math-based Filter String for Canvas Context
   const getCanvasFilterString = () => {
     let base = `brightness(${brightness}%)`;
     switch (activeFilter) {
@@ -327,11 +352,11 @@ export const StudioModal: React.FC<StudioModalProps> = ({
 
       const hasMedia = !isYoutubeIframe && mediaSourceUrl && mediaVideoRef.current && mediaVideoRef.current.readyState >= 2;
 
-      // 1. SOLO CAMERA MODE (Full-screen user, no upload needed!)
+      // 1. SOLO CAMERA MODE
       if (layoutMode === 'solo-camera') {
         drawCamera(ctx, 0, 0, targetWidth, targetHeight);
       } 
-      // 2. SOLO MEDIA MODE (Reference video full-screen)
+      // 2. SOLO MEDIA MODE
       else if (layoutMode === 'solo-media') {
         if (hasMedia && mediaVideoRef.current) {
           drawMedia(ctx, 0, 0, targetWidth, targetHeight, mediaVideoRef.current);
@@ -341,14 +366,12 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       } 
       // 3. PICTURE-IN-PICTURE (PiP Floating Camera)
       else if (layoutMode === 'pip') {
-        // Draw background media
         if (hasMedia && mediaVideoRef.current) {
           drawMedia(ctx, 0, 0, targetWidth, targetHeight, mediaVideoRef.current);
         } else {
           drawPlaceholder(ctx, 0, 0, targetWidth, targetHeight, isYoutubeIframe ? 'YouTube Video Live' : 'Reference Media');
         }
 
-        // Draw floating PiP camera in bottom-right
         const pipW = targetWidth * 0.32;
         const pipH = (pipW * 9) / 16;
         const pipX = targetWidth - pipW - 32;
@@ -363,7 +386,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         drawCamera(ctx, pipX, pipY, pipW, pipH);
         ctx.restore();
       } 
-      // 4. SPLIT STUDIO (Side-by-Side or Top/Bottom)
+      // 4. SPLIT STUDIO (50/50 Side-by-Side or Top/Bottom)
       else {
         if (orientation === 'landscape') {
           const halfWidth = targetWidth / 2;
@@ -547,7 +570,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         micGainNodeRef.current = micGain;
       }
 
-      // Media Track with Volume Gain (Only if playing media)
+      // Media Track with Volume Gain
       if (mediaVideoRef.current && layoutMode !== 'solo-camera') {
         try {
           const mediaSource = audioCtx.createMediaElementSource(mediaVideoRef.current);
@@ -726,7 +749,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             title={micMuted ? 'Click to Unmute Mic' : 'Click to Mute Mic'}
           >
             {micMuted ? <MicOff className="w-3.5 h-3.5 text-red-400" /> : <Mic className="w-3.5 h-3.5 text-emerald-400" />}
-            <span className="hidden md:inline">{micMuted ? 'Mic: OFF' : 'Mic: ON'}</span>
+            <span className="hidden md:inline">{micMuted ? 'Mic: OFF' : `Mic: ${Math.round(micVolume * 100)}%`}</span>
           </button>
 
           {/* Reference Video Sound Control (In split/pip mode) */}
@@ -741,7 +764,21 @@ export const StudioModal: React.FC<StudioModalProps> = ({
               title={mediaMuted ? 'Click to Unmute Media' : 'Click to Mute Media'}
             >
               {mediaMuted ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
-              <span className="hidden md:inline">{mediaMuted ? 'Media: OFF' : 'Media: ON'}</span>
+              <span className="hidden md:inline">{mediaMuted ? 'Video: OFF' : `Video: ${Math.round(mediaVolume * 100)}%`}</span>
+            </button>
+          )}
+
+          {/* Audio Mixer HUD Toggle */}
+          {layoutMode !== 'solo-camera' && (
+            <button
+              onClick={() => setShowVolumeMixerHUD(!showVolumeMixerHUD)}
+              className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border flex items-center gap-1 text-xs font-semibold transition-all ${
+                showVolumeMixerHUD ? 'bg-amber-400 text-slate-950 border-amber-300 shadow' : 'bg-slate-800 text-slate-300 border-slate-700'
+              }`}
+              title="Show / Hide On-Screen Split Audio Mixer"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span className="hidden lg:inline">Mixer</span>
             </button>
           )}
 
@@ -791,13 +828,13 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       {/* DEDICATED MOBILE & DESKTOP STUDIO MODE & FORMAT BAR */}
       <div className="bg-slate-900/95 border-b border-slate-800 px-2.5 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2 z-30">
         
-        {/* 1. Layout Mode Switcher (Prominent on all screens!) */}
+        {/* 1. Layout Mode Switcher */}
         <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
           <button
             onClick={() => setLayoutMode('solo-camera')}
             className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
               layoutMode === 'solo-camera'
-                ? 'bg-amber-400 text-slate-950 shadow-md scale-102'
+                ? 'bg-amber-400 text-slate-950 shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
             title="Record myself full-screen with teleprompter"
@@ -810,7 +847,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             onClick={() => { setLayoutMode('split'); setShowReferenceBar(true); }}
             className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
               layoutMode === 'split'
-                ? 'bg-cyan-500 text-slate-950 shadow-md scale-102'
+                ? 'bg-cyan-500 text-slate-950 shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
             title="Split screen 50/50 for reaction video"
@@ -823,7 +860,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             onClick={() => { setLayoutMode('pip'); setShowReferenceBar(true); }}
             className={`px-2.5 py-1 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
               layoutMode === 'pip'
-                ? 'bg-purple-500 text-slate-950 shadow-md scale-102'
+                ? 'bg-purple-500 text-slate-950 shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
             title="Picture-in-Picture floating camera"
@@ -882,7 +919,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
 
       </div>
 
-      {/* Reference Video Loader (Shown when in Split/PiP or toggled) */}
+      {/* Reference Video Loader (Shown in Split/PiP) */}
       {showReferenceBar && layoutMode !== 'solo-camera' && (
         <div className="bg-slate-900/90 border-b border-slate-800 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs z-20 animate-in slide-in-from-top-1">
           <div className="flex-1 flex items-center gap-1.5 min-w-[280px]">
@@ -1045,6 +1082,88 @@ export const StudioModal: React.FC<StudioModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* ON-STAGE LIVE SPLIT AUDIO VOLUME MIXER OVERLAY */}
+          {showVolumeMixerHUD && layoutMode !== 'solo-camera' && (
+            <div className="absolute top-4 left-4 z-30 bg-slate-900/95 border border-slate-700/80 backdrop-blur-xl p-3 rounded-2xl shadow-2xl space-y-2.5 max-w-[280px] text-xs">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                <span className="font-bold text-amber-300 flex items-center gap-1">
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>Split Audio Mixer</span>
+                </span>
+                <button
+                  onClick={() => setShowVolumeMixerHUD(false)}
+                  className="text-slate-400 hover:text-white p-0.5 rounded"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* 1. Mic Boost Slider */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                    <Mic className="w-3 h-3" />
+                    <span>My Mic Voice:</span>
+                  </span>
+                  <span className="font-mono text-emerald-300 font-bold">{micMuted ? 'MUTED' : `${Math.round(micVolume * 100)}%`}</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  value={micVolume}
+                  onChange={(e) => setMicVolume(Number(e.target.value))}
+                  className="w-full accent-emerald-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                />
+              </div>
+
+              {/* 2. Video Sound Volume Slider */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-cyan-400 font-semibold flex items-center gap-1">
+                    <Volume2 className="w-3 h-3" />
+                    <span>Video / YouTube Sound:</span>
+                  </span>
+                  <span className="font-mono text-cyan-300 font-bold">{mediaMuted ? 'MUTED' : `${Math.round(mediaVolume * 100)}%`}</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  value={mediaVolume}
+                  onChange={(e) => setMediaVolume(Number(e.target.value))}
+                  className="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                />
+              </div>
+
+              {/* Quick 1-Tap Balance Presets */}
+              <div className="flex items-center gap-1 pt-1">
+                <button
+                  onClick={() => { setMicVolume(1.5); setMediaVolume(0.2); setMediaMuted(false); }}
+                  className="flex-1 py-1 px-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold text-center"
+                  title="Boost voice and lower video sound"
+                >
+                  🎙️ Voice Focus
+                </button>
+                <button
+                  onClick={() => { setMediaVolume(0); setMediaMuted(true); }}
+                  className="flex-1 py-1 px-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 rounded-lg text-[10px] font-bold text-center"
+                  title="Mute video audio completely"
+                >
+                  🔇 Mute Video
+                </button>
+                <button
+                  onClick={() => { setMicVolume(1.0); setMediaVolume(1.0); setMediaMuted(false); }}
+                  className="flex-1 py-1 px-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-[10px] font-bold text-center"
+                >
+                  ⚖️ 50/50
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Floating Live Reactions */}
           <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
