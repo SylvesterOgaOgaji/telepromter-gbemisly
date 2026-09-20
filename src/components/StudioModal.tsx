@@ -43,7 +43,11 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Search,
+  Move,
+  Minimize2,
+  Maximize2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { getSupportedVideoMimeType, sanitizeFileName } from '../utils/mediaExport';
@@ -79,7 +83,20 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [showScriptDrawer, setShowScriptDrawer] = useState(false);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
   const [showReferenceBar, setShowReferenceBar] = useState(false);
+  const [showQuickSearch, setShowQuickSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Draggable Floating Mixer State
   const [showVolumeMixerHUD, setShowVolumeMixerHUD] = useState(true);
+  const [isMixerMinimized, setIsMixerMinimized] = useState(false);
+  const [mixerPos, setMixerPos] = useState({ x: 16, y: 70 });
+  const [isDraggingMixer, setIsDraggingMixer] = useState(false);
+  const dragStartRef = useRef<{ startX: number; startY: number; posX: number; posY: number }>({
+    startX: 0,
+    startY: 0,
+    posX: 16,
+    posY: 70
+  });
 
   // Studio Layout Mode (Solo Camera, Split, PiP, Solo Media)
   const [layoutMode, setLayoutMode] = useState<StudioLayoutMode>('split');
@@ -97,8 +114,8 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [youtubeEmbedId, setYoutubeEmbedId] = useState<string>('');
 
   // Audio Volume Sliders & Mute Controls (0 to 200%)
-  const [micVolume, setMicVolume] = useState<number>(1.2); // Default 120% mic boost
-  const [mediaVolume, setMediaVolume] = useState<number>(0.4); // Default 40% video sound for clear speech
+  const [micVolume, setMicVolume] = useState<number>(1.2); // 120% mic boost
+  const [mediaVolume, setMediaVolume] = useState<number>(0.35); // 35% video sound for clear speech
   const [micMuted, setMicMuted] = useState<boolean>(false);
   const [mediaMuted, setMediaMuted] = useState<boolean>(false);
   const [cameraEnabled, setCameraEnabled] = useState<boolean>(true);
@@ -109,7 +126,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [brightness, setBrightness] = useState<number>(100);
 
   // Custom Logo, Watermark & News Ticker Text Customization
-  const [showLogo, setShowLogo] = useState<boolean>(false); // Clean feed (NO LOGO) by default
+  const [showLogo, setShowLogo] = useState<boolean>(false);
   const [customLogoUrl, setCustomLogoUrl] = useState<string>('/debzane-logo.jpg');
   const [customLogoText, setCustomLogoText] = useState<string>('STUDIO');
   const [showTicker, setShowTicker] = useState<boolean>(false);
@@ -277,17 +294,12 @@ export const StudioModal: React.FC<StudioModalProps> = ({
 
   // Real-time audio volume gains for Video & YouTube iframe
   useEffect(() => {
-    // 1. Web Audio GainNode (for composite stream)
     if (mediaGainNodeRef.current) {
       mediaGainNodeRef.current.gain.value = mediaMuted ? 0 : mediaVolume;
     }
-
-    // 2. HTML5 Video Player volume
     if (mediaVideoRef.current) {
       mediaVideoRef.current.volume = mediaMuted ? 0 : Math.min(1, Math.max(0, mediaVolume));
     }
-
-    // 3. YouTube Embed Iframe postMessage control
     try {
       const iframe = document.querySelector('iframe[title="YouTube Reference Player"]') as HTMLIFrameElement;
       if (iframe && iframe.contentWindow) {
@@ -328,7 +340,61 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     }
   };
 
-  // 60FPS Canvas Compositing Engine with Solo, Split & PiP modes
+  /**
+   * Aspect-Ratio Preserving Center-Crop (Object-Fit: Cover)
+   * Prevents video from being squished, stretched, or pressed together!
+   */
+  const drawCoverImage = (
+    context: CanvasRenderingContext2D,
+    video: HTMLVideoElement,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+    mirror: boolean = false,
+    filterString: string = 'none'
+  ) => {
+    const vw = video.videoWidth || dw;
+    const vh = video.videoHeight || dh;
+    const videoAspect = vw / vh;
+    const destAspect = dw / dh;
+
+    let sx = 0;
+    let sy = 0;
+    let sw = vw;
+    let sh = vh;
+
+    if (videoAspect > destAspect) {
+      // Source is wider than destination: crop left and right
+      sw = vh * destAspect;
+      sx = (vw - sw) / 2;
+    } else {
+      // Source is taller than destination: crop top and bottom
+      sh = vw / destAspect;
+      sy = (vh - sh) / 2;
+    }
+
+    context.save();
+    context.beginPath();
+    context.rect(dx, dy, dw, dh);
+    context.clip();
+
+    if (filterString !== 'none') {
+      context.filter = filterString;
+    }
+
+    if (mirror) {
+      context.translate(dx + dw, dy);
+      context.scale(-1, 1);
+      context.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
+    } else {
+      context.drawImage(video, sx, sy, sw, sh, dx, dy, dw, dh);
+    }
+
+    context.restore();
+  };
+
+  // 60FPS Canvas Compositing Engine with Aspect-Ratio Preserving Object-Fit Cover
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -352,7 +418,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
 
       const hasMedia = !isYoutubeIframe && mediaSourceUrl && mediaVideoRef.current && mediaVideoRef.current.readyState >= 2;
 
-      // 1. SOLO CAMERA MODE
+      // 1. SOLO CAMERA MODE (Full-screen user without stretching)
       if (layoutMode === 'solo-camera') {
         drawCamera(ctx, 0, 0, targetWidth, targetHeight);
       } 
@@ -386,7 +452,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         drawCamera(ctx, pipX, pipY, pipW, pipH);
         ctx.restore();
       } 
-      // 4. SPLIT STUDIO (50/50 Side-by-Side or Top/Bottom)
+      // 4. SPLIT STUDIO (50/50 Side-by-Side or Top/Bottom with Cover-Crop)
       else {
         if (orientation === 'landscape') {
           const halfWidth = targetWidth / 2;
@@ -509,26 +575,13 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         return;
       }
 
-      context.save();
-      context.beginPath();
-      context.rect(x, y, w, h);
-      context.clip();
-
-      context.filter = getCanvasFilterString();
-      context.translate(x + w, y);
-      context.scale(-1, 1);
-      context.drawImage(cameraVideoRef.current, 0, 0, w, h);
-      context.restore();
+      // Draw with cover aspect ratio to prevent squishing
+      drawCoverImage(context, cameraVideoRef.current, x, y, w, h, true, getCanvasFilterString());
     };
 
     const drawMedia = (context: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, videoElem: HTMLVideoElement) => {
-      context.save();
-      context.beginPath();
-      context.rect(x, y, w, h);
-      context.clip();
-      context.filter = 'none';
-      context.drawImage(videoElem, x, y, w, h);
-      context.restore();
+      // Draw with cover aspect ratio
+      drawCoverImage(context, videoElem, x, y, w, h, false, 'none');
     };
 
     const drawPlaceholder = (context: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, label: string) => {
@@ -583,7 +636,6 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         } catch (e) {}
       }
 
-      // Capture 60FPS Video
       const canvasStream = (canvas as any).captureStream ? (canvas as any).captureStream(60) : null;
 
       const combinedStream = new MediaStream([
@@ -689,6 +741,49 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     };
   }, [isPlaying, speed]);
 
+  // Touch / Mouse Dragging Handlers for Floating Mixer
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+    setIsDraggingMixer(true);
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    dragStartRef.current = {
+      startX: clientX,
+      startY: clientY,
+      posX: mixerPos.x,
+      posY: mixerPos.y
+    };
+  };
+
+  useEffect(() => {
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      if (!isDraggingMixer) return;
+      const clientX = 'touches' in e ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
+      const clientY = 'touches' in e ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
+      const dx = clientX - dragStartRef.current.startX;
+      const dy = clientY - dragStartRef.current.startY;
+      const newX = Math.max(0, Math.min(window.innerWidth - 180, dragStartRef.current.posX + dx));
+      const newY = Math.max(0, Math.min(window.innerHeight - 120, dragStartRef.current.posY + dy));
+      setMixerPos({ x: newX, y: newY });
+    };
+
+    const handleEnd = () => {
+      if (isDraggingMixer) setIsDraggingMixer(false);
+    };
+
+    if (isDraggingMixer) {
+      window.addEventListener('mousemove', handleMove);
+      window.addEventListener('mouseup', handleEnd);
+      window.addEventListener('touchmove', handleMove);
+      window.addEventListener('touchend', handleEnd);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+  }, [isDraggingMixer]);
+
   if (!isOpen) return null;
 
   const formatTimer = (totalSeconds: number) => {
@@ -696,6 +791,28 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     const secs = totalSeconds % 60;
     return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
+
+  // Quick search items
+  const quickSearchActions = [
+    { title: 'Audio Mixer HUD', desc: 'Control Mic & Video volume', action: () => { setShowVolumeMixerHUD(true); setShowQuickSearch(false); } },
+    { title: 'Solo Camera Mode', desc: 'Record yourself full-screen with teleprompter', action: () => { setLayoutMode('solo-camera'); setShowQuickSearch(false); } },
+    { title: 'Split 50/50 Mode', desc: 'Side-by-side reaction studio', action: () => { setLayoutMode('split'); setShowReferenceBar(true); setShowQuickSearch(false); } },
+    { title: 'Picture-in-Picture (PiP)', desc: 'Floating camera over reference video', action: () => { setLayoutMode('pip'); setShowReferenceBar(true); setShowQuickSearch(false); } },
+    { title: 'Beauty Glow Filter', desc: 'Skin smoothing and lighting boost', action: () => { setActiveFilter('beauty'); setShowQuickSearch(false); } },
+    { title: 'Cinematic Film Filter', desc: 'Warm teal & orange movie grade', action: () => { setActiveFilter('cinematic'); setShowQuickSearch(false); } },
+    { title: 'Matrix Cyber Filter', desc: 'Sci-fi futuristic matrix green', action: () => { setActiveFilter('matrix'); setShowQuickSearch(false); } },
+    { title: 'MP4 Universal Format', desc: 'Playable on iPhone, Mac, Windows, Android', action: () => { setSelectedFormat('mp4'); setShowQuickSearch(false); } },
+    { title: 'MP3 Audio Format', desc: 'Extract voice podcast audio only', action: () => { setSelectedFormat('mp3'); setShowQuickSearch(false); } },
+    { title: 'Clean Feed (No Logo)', desc: 'Turn off all watermarks', action: () => { setShowLogo(false); setShowQuickSearch(false); } },
+    { title: 'Custom Watermark Logo', desc: 'Upload your own brand logo', action: () => { setShowSettingsDrawer(true); setShowQuickSearch(false); } },
+    { title: 'News Ticker Toggle', desc: 'Edit scrolling bottom broadcast ticker', action: () => { setShowTicker(!showTicker); setShowQuickSearch(false); } },
+    { title: 'Orientation Switch', desc: 'Toggle 9:16 Portrait / 16:9 Landscape', action: () => { setOrientation(orientation === 'portrait' ? 'landscape' : 'portrait'); setShowQuickSearch(false); } }
+  ];
+
+  const filteredSearchActions = quickSearchActions.filter(a =>
+    a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    a.desc.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="fixed inset-0 z-[80] bg-slate-950 flex flex-col select-none overflow-hidden animate-in fade-in duration-200 text-slate-100 font-sans">
@@ -729,15 +846,25 @@ export const StudioModal: React.FC<StudioModalProps> = ({
                 {orientation === 'portrait' ? '9:16' : '16:9'}
               </span>
             </h1>
-            <p className="text-[10px] text-slate-400 truncate max-w-[100px] sm:max-w-[160px]">
+            <p className="text-[10px] text-slate-400 truncate max-w-[90px] sm:max-w-[160px]">
               {scriptTitle || 'Take 1'}
             </p>
           </div>
         </div>
 
-        {/* Center/Right: Audio/Video & Drawer Toggles */}
+        {/* Center/Right: Quick Search, Audio/Video & Drawer Toggles */}
         <div className="flex items-center gap-1.5">
           
+          {/* Quick Tool Search Button (Mobile & Desktop) */}
+          <button
+            onClick={() => setShowQuickSearch(true)}
+            className="p-1.5 sm:px-2.5 sm:py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl border border-slate-700 flex items-center gap-1 text-xs font-semibold"
+            title="Search Studio Features & Settings"
+          >
+            <Search className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Search</span>
+          </button>
+
           {/* Microphone Mute Control */}
           <button
             onClick={() => setMicMuted(!micMuted)}
@@ -775,7 +902,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
               className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border flex items-center gap-1 text-xs font-semibold transition-all ${
                 showVolumeMixerHUD ? 'bg-amber-400 text-slate-950 border-amber-300 shadow' : 'bg-slate-800 text-slate-300 border-slate-700'
               }`}
-              title="Show / Hide On-Screen Split Audio Mixer"
+              title="Show / Hide Draggable Live Split Audio Mixer"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span className="hidden lg:inline">Mixer</span>
@@ -789,7 +916,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             title={`Switch to ${orientation === 'portrait' ? 'Landscape (16:9)' : 'Portrait (9:16)'}`}
           >
             {orientation === 'portrait' ? <Smartphone className="w-3.5 h-3.5 text-amber-400" /> : <Monitor className="w-3.5 h-3.5 text-cyan-400" />}
-            <span className="hidden sm:inline">{orientation === 'portrait' ? 'Portrait 9:16' : 'Landscape 16:9'}</span>
+            <span className="hidden sm:inline">{orientation === 'portrait' ? '9:16' : '16:9'}</span>
           </button>
 
           {/* Branding & Watermark Drawer */}
@@ -945,6 +1072,54 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         </div>
       )}
 
+      {/* QUICK SEARCH & TOOL PALETTE MODAL (Mobile & Desktop Searchable) */}
+      {showQuickSearch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-4 flex flex-col max-h-[80vh]">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <span className="font-bold text-sm text-amber-300 flex items-center gap-1.5">
+                <Search className="w-4 h-4 text-amber-400" />
+                <span>Search Studio Features & Controls</span>
+              </span>
+              <button
+                onClick={() => setShowQuickSearch(false)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="py-3">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search (e.g. mixer, solo, beauty, mp4, watermark)..."
+                autoFocus
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+              {filteredSearchActions.length > 0 ? (
+                filteredSearchActions.map((item, idx) => (
+                  <button
+                    key={idx}
+                    onClick={item.action}
+                    className="w-full p-2.5 bg-slate-950/60 hover:bg-amber-400/10 border border-slate-800 hover:border-amber-400/40 rounded-xl text-left transition-all group"
+                  >
+                    <div className="font-bold text-xs text-slate-200 group-hover:text-amber-300">{item.title}</div>
+                    <div className="text-[11px] text-slate-400">{item.desc}</div>
+                  </button>
+                ))
+              ) : (
+                <div className="text-center py-6 text-xs text-slate-500">No matching studio features found.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Branding & Watermark Settings Drawer */}
       {showSettingsDrawer && (
         <div className="bg-slate-900/98 border-b border-slate-700 p-4 z-40 grid grid-cols-1 md:grid-cols-3 gap-4 max-h-[40vh] overflow-y-auto text-xs animate-in slide-in-from-top-2">
@@ -1032,15 +1207,15 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         </div>
       )}
 
-      {/* Main Studio Compositor Stage */}
-      <main className="flex-1 relative flex items-center justify-center bg-black overflow-hidden p-2">
+      {/* EDGE-TO-EDGE FULL SCREEN STUDIO STAGE */}
+      <main className="flex-1 relative flex items-center justify-center bg-black overflow-hidden w-full h-full">
         
-        {/* The Live 60FPS Composited Canvas */}
-        <div className={`relative max-w-full max-h-full flex items-center justify-center rounded-2xl overflow-hidden border border-slate-800 shadow-2xl ${orientation === 'portrait' ? 'aspect-[9/16]' : 'aspect-[16/9]'}`}>
+        {/* The Live 60FPS Composited Canvas (Fills Screen Edge-to-Edge) */}
+        <div className={`relative w-full h-full flex items-center justify-center overflow-hidden ${orientation === 'portrait' ? 'aspect-[9/16]' : 'aspect-[16/9]'}`}>
           
           <canvas
             ref={canvasRef}
-            className="w-full h-full object-contain"
+            className="w-full h-full object-cover"
           />
 
           {/* YouTube Embed Player Layer (In split/pip mode) */}
@@ -1083,88 +1258,6 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             </div>
           </div>
 
-          {/* ON-STAGE LIVE SPLIT AUDIO VOLUME MIXER OVERLAY */}
-          {showVolumeMixerHUD && layoutMode !== 'solo-camera' && (
-            <div className="absolute top-4 left-4 z-30 bg-slate-900/95 border border-slate-700/80 backdrop-blur-xl p-3 rounded-2xl shadow-2xl space-y-2.5 max-w-[280px] text-xs">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
-                <span className="font-bold text-amber-300 flex items-center gap-1">
-                  <SlidersHorizontal className="w-3.5 h-3.5" />
-                  <span>Split Audio Mixer</span>
-                </span>
-                <button
-                  onClick={() => setShowVolumeMixerHUD(false)}
-                  className="text-slate-400 hover:text-white p-0.5 rounded"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* 1. Mic Boost Slider */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                    <Mic className="w-3 h-3" />
-                    <span>My Mic Voice:</span>
-                  </span>
-                  <span className="font-mono text-emerald-300 font-bold">{micMuted ? 'MUTED' : `${Math.round(micVolume * 100)}%`}</span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={2}
-                  step={0.05}
-                  value={micVolume}
-                  onChange={(e) => setMicVolume(Number(e.target.value))}
-                  className="w-full accent-emerald-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
-                />
-              </div>
-
-              {/* 2. Video Sound Volume Slider */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-cyan-400 font-semibold flex items-center gap-1">
-                    <Volume2 className="w-3 h-3" />
-                    <span>Video / YouTube Sound:</span>
-                  </span>
-                  <span className="font-mono text-cyan-300 font-bold">{mediaMuted ? 'MUTED' : `${Math.round(mediaVolume * 100)}%`}</span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={2}
-                  step={0.05}
-                  value={mediaVolume}
-                  onChange={(e) => setMediaVolume(Number(e.target.value))}
-                  className="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
-                />
-              </div>
-
-              {/* Quick 1-Tap Balance Presets */}
-              <div className="flex items-center gap-1 pt-1">
-                <button
-                  onClick={() => { setMicVolume(1.5); setMediaVolume(0.2); setMediaMuted(false); }}
-                  className="flex-1 py-1 px-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold text-center"
-                  title="Boost voice and lower video sound"
-                >
-                  🎙️ Voice Focus
-                </button>
-                <button
-                  onClick={() => { setMediaVolume(0); setMediaMuted(true); }}
-                  className="flex-1 py-1 px-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 rounded-lg text-[10px] font-bold text-center"
-                  title="Mute video audio completely"
-                >
-                  🔇 Mute Video
-                </button>
-                <button
-                  onClick={() => { setMicVolume(1.0); setMediaVolume(1.0); setMediaMuted(false); }}
-                  className="flex-1 py-1 px-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-[10px] font-bold text-center"
-                >
-                  ⚖️ 50/50
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Floating Live Reactions */}
           <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
             {floatingEmojis.map(item => (
@@ -1178,6 +1271,124 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             ))}
           </div>
         </div>
+
+        {/* FULLY DRAGGABLE FLOATING AUDIO MIXER (Can move anywhere across/outside frame) */}
+        {showVolumeMixerHUD && layoutMode !== 'solo-camera' && (
+          <div 
+            style={{ 
+              transform: `translate3d(${mixerPos.x}px, ${mixerPos.y}px, 0)`,
+              touchAction: 'none'
+            }}
+            className="fixed top-0 left-0 z-50 bg-slate-900/98 border border-slate-700/80 backdrop-blur-2xl rounded-2xl shadow-2xl text-xs select-none max-w-[290px]"
+          >
+            {/* Draggable Header */}
+            <div 
+              onMouseDown={handleDragStart}
+              onTouchStart={handleDragStart}
+              className="px-3 py-2 bg-slate-950/90 rounded-t-2xl border-b border-slate-800 flex items-center justify-between cursor-move active:cursor-grabbing"
+              title="Touch or Drag to move anywhere on screen"
+            >
+              <div className="flex items-center gap-1.5 font-bold text-amber-300 text-[11px]">
+                <Move className="w-3.5 h-3.5 text-amber-400" />
+                <span>Move Mixer</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setIsMixerMinimized(!isMixerMinimized); }}
+                  className="p-1 text-slate-400 hover:text-white rounded"
+                  title={isMixerMinimized ? 'Expand Mixer' : 'Minimize Mixer'}
+                >
+                  {isMixerMinimized ? <Maximize2 className="w-3 h-3" /> : <Minimize2 className="w-3 h-3" />}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowVolumeMixerHUD(false); }}
+                  className="p-1 text-slate-400 hover:text-white rounded"
+                  title="Close Mixer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+
+            {/* Minimized Pill View */}
+            {isMixerMinimized ? (
+              <div className="p-2 flex items-center gap-2 font-mono text-[11px]">
+                <span className="text-emerald-400 font-bold">Mic:{Math.round(micVolume * 100)}%</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-cyan-400 font-bold">Vid:{Math.round(mediaVolume * 100)}%</span>
+              </div>
+            ) : (
+              /* Expanded Full Controls */
+              <div className="p-3 space-y-2.5">
+                
+                {/* 1. Mic Boost Slider */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <Mic className="w-3 h-3" />
+                      <span>My Voice:</span>
+                    </span>
+                    <span className="font-mono text-emerald-300 font-bold">{micMuted ? 'MUTED' : `${Math.round(micVolume * 100)}%`}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    value={micVolume}
+                    onChange={(e) => setMicVolume(Number(e.target.value))}
+                    className="w-full accent-emerald-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                  />
+                </div>
+
+                {/* 2. Video Sound Volume Slider */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-cyan-400 font-semibold flex items-center gap-1">
+                      <Volume2 className="w-3 h-3" />
+                      <span>Video Sound:</span>
+                    </span>
+                    <span className="font-mono text-cyan-300 font-bold">{mediaMuted ? 'MUTED' : `${Math.round(mediaVolume * 100)}%`}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    value={mediaVolume}
+                    onChange={(e) => setMediaVolume(Number(e.target.value))}
+                    className="w-full accent-cyan-400 cursor-pointer h-1.5 bg-slate-800 rounded-lg"
+                  />
+                </div>
+
+                {/* Quick 1-Tap Balance Presets */}
+                <div className="flex items-center gap-1 pt-1">
+                  <button
+                    onClick={() => { setMicVolume(1.5); setMediaVolume(0.2); setMediaMuted(false); }}
+                    className="flex-1 py-1 px-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold text-center"
+                    title="Boost voice and lower video sound"
+                  >
+                    🎙️ Voice Focus
+                  </button>
+                  <button
+                    onClick={() => { setMediaVolume(0); setMediaMuted(true); }}
+                    className="flex-1 py-1 px-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 rounded-lg text-[10px] font-bold text-center"
+                    title="Mute video audio completely"
+                  >
+                    🔇 Mute Vid
+                  </button>
+                  <button
+                    onClick={() => { setMicVolume(1.0); setMediaVolume(1.0); setMediaMuted(false); }}
+                    className="flex-1 py-1 px-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-[10px] font-bold text-center"
+                  >
+                    ⚖️ 50/50
+                  </button>
+                </div>
+
+              </div>
+            )}
+          </div>
+        )}
 
       </main>
 
