@@ -27,6 +27,7 @@ import {
 
 import { InstallPrompt } from './components/InstallPrompt';
 import { AccessibilityFloating } from './components/AccessibilityFloating';
+import { ExportFormat } from './types';
 
 export function App() {
   const {
@@ -48,6 +49,8 @@ export function App() {
   const [isPrompterActive, setIsPrompterActive] = useState(false);
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [trimmerBlob, setTrimmerBlob] = useState<Blob | null>(null);
+  const [trimmerFileName, setTrimmerFileName] = useState<string>('my_studio_take');
+  const [trimmerFormat, setTrimmerFormat] = useState<ExportFormat>('mp4');
   const [isDonateOpen, setIsDonateOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -311,9 +314,11 @@ export function App() {
           script={activeScript}
           settings={settings}
           onUpdateSetting={updateSetting}
-          onOpenTrimmer={(blob) => {
+          onOpenTrimmer={(blob, fileName, format) => {
             setIsStudioOpen(false);
             setTrimmerBlob(blob);
+            if (fileName) setTrimmerFileName(fileName);
+            if (format) setTrimmerFormat(format);
           }}
         />
       )}
@@ -322,6 +327,8 @@ export function App() {
       {trimmerBlob && (
         <VideoTrimmerModal
           videoBlob={trimmerBlob}
+          initialFileName={trimmerFileName}
+          initialFormat={trimmerFormat}
           onClose={() => setTrimmerBlob(null)}
           onSave={(trimmedBlob, filename) => {
             const url = URL.createObjectURL(trimmedBlob);

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Script, PrompterSettings, VideoFilter } from '../types';
+import { Script, PrompterSettings, VideoFilter, StudioLayoutMode, ExportFormat } from '../types';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { 
   Radio, 
@@ -14,7 +14,6 @@ import {
   Monitor, 
   Sun, 
   Edit3, 
-  HelpCircle, 
   Sliders, 
   Check, 
   Mic, 
@@ -33,9 +32,18 @@ import {
   Link,
   Film,
   Image as ImageIcon,
-  Type
+  Type,
+  User,
+  Split,
+  Eye,
+  EyeOff,
+  FileVideo,
+  FileAudio,
+  ShieldCheck,
+  Zap
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { getSupportedVideoMimeType, sanitizeFileName } from '../utils/mediaExport';
 
 interface StudioModalProps {
   isOpen: boolean;
@@ -43,7 +51,7 @@ interface StudioModalProps {
   script: Script;
   settings: PrompterSettings;
   onUpdateSetting: <K extends keyof PrompterSettings>(key: K, value: PrompterSettings[K]) => void;
-  onOpenTrimmer: (videoBlob: Blob) => void;
+  onOpenTrimmer: (videoBlob: Blob, initialFileName?: string, initialFormat?: ExportFormat) => void;
 }
 
 interface FloatingEmoji {
@@ -67,7 +75,15 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [scriptContent, setScriptContent] = useState(script.content);
   const [showScriptDrawer, setShowScriptDrawer] = useState(false);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(false);
-  const [showInstructions, setShowInstructions] = useState(false);
+
+  // Studio Layout Mode (Solo Camera, Split, PiP, Solo Media)
+  const [layoutMode, setLayoutMode] = useState<StudioLayoutMode>('solo-camera');
+
+  // Custom File Name
+  const [customFileName, setCustomFileName] = useState<string>(
+    sanitizeFileName(script.title ? script.title.replace(/[^\w\s-]/gi, '') : 'studio_take')
+  );
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('mp4');
 
   // Media Reference state
   const [mediaSourceUrl, setMediaSourceUrl] = useState<string>('');
@@ -87,11 +103,12 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   const [activeFilter, setActiveFilter] = useState<VideoFilter>('beauty');
   const [brightness, setBrightness] = useState<number>(100);
 
-  // Custom Logo & News Ticker Text Customization
+  // Custom Logo, Watermark & News Ticker Text Customization
+  const [showLogo, setShowLogo] = useState<boolean>(false); // Clean feed by default or toggleable
   const [customLogoUrl, setCustomLogoUrl] = useState<string>('/debzane-logo.jpg');
-  const [customLogoText, setCustomLogoText] = useState<string>('DEBZANE STUDIO');
-  const [showTicker, setShowTicker] = useState<boolean>(true);
-  const [tickerText, setTickerText] = useState<string>('BREAKING: Debzane Concept Studio • For Coaching & Inquiries Call: 08057961025 • 100% Free');
+  const [customLogoText, setCustomLogoText] = useState<string>('STUDIO');
+  const [showTicker, setShowTicker] = useState<boolean>(false);
+  const [tickerText, setTickerText] = useState<string>('BREAKING: Live Studio Recording • High Definition Output • 100% Free');
   const [mediaSwapped, setMediaSwapped] = useState<boolean>(false);
 
   // Recording State
@@ -126,19 +143,22 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   useEffect(() => {
     setScriptTitle(script.title);
     setScriptContent(script.content);
+    setCustomFileName(sanitizeFileName(script.title || 'studio_take'));
   }, [script.id, script.title, script.content]);
 
   // Pre-load custom logo image
   useEffect(() => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = customLogoUrl;
-    img.onload = () => {
-      logoImageRef.current = img;
-    };
-  }, [customLogoUrl]);
+    if (showLogo && customLogoUrl) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = customLogoUrl;
+      img.onload = () => {
+        logoImageRef.current = img;
+      };
+    }
+  }, [customLogoUrl, showLogo]);
 
-  // Robust YouTube URL Parser (Supports standard watch, youtu.be, embed, shorts, mobile)
+  // Robust YouTube URL Parser
   const extractYoutubeId = (url: string): string => {
     const trimmed = url.trim();
     if (!trimmed) return '';
@@ -153,10 +173,12 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       setIsYoutubeIframe(true);
       setYoutubeEmbedId(ytId);
       setMediaSourceUrl('');
+      setLayoutMode('split');
     } else if (onlineInputUrl.trim()) {
       setIsYoutubeIframe(false);
       setYoutubeEmbedId('');
       setMediaSourceUrl(onlineInputUrl.trim());
+      setLayoutMode('split');
     }
   };
 
@@ -167,6 +189,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     setIsYoutubeIframe(false);
     setYoutubeEmbedId('');
     setMediaSourceUrl(url);
+    setLayoutMode('split');
   };
 
   const handleCustomLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -174,6 +197,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     if (!file) return;
     const url = URL.createObjectURL(file);
     setCustomLogoUrl(url);
+    setShowLogo(true);
   };
 
   // Start Camera with high compatibility for Desktop, Tablets & Mobile phones
@@ -276,7 +300,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     }
   };
 
-  // 60FPS Canvas Compositing Engine
+  // 60FPS Canvas Compositing Engine with Solo, Split & PiP modes
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -300,81 +324,121 @@ export const StudioModal: React.FC<StudioModalProps> = ({
 
       const hasMedia = !isYoutubeIframe && mediaSourceUrl && mediaVideoRef.current && mediaVideoRef.current.readyState >= 2;
 
-      // Layout calculations
-      if (orientation === 'landscape') {
-        const halfWidth = targetWidth / 2;
-        const leftIsCam = mediaSwapped;
-        const rightIsCam = !mediaSwapped;
-
-        if (leftIsCam) {
-          drawCamera(ctx, 0, 0, halfWidth, targetHeight);
-        } else if (hasMedia && mediaVideoRef.current) {
-          drawMedia(ctx, 0, 0, halfWidth, targetHeight, mediaVideoRef.current);
+      // 1. SOLO CAMERA MODE (Full-screen user, no upload needed!)
+      if (layoutMode === 'solo-camera') {
+        drawCamera(ctx, 0, 0, targetWidth, targetHeight);
+      } 
+      // 2. SOLO MEDIA MODE (Reference video full-screen)
+      else if (layoutMode === 'solo-media') {
+        if (hasMedia && mediaVideoRef.current) {
+          drawMedia(ctx, 0, 0, targetWidth, targetHeight, mediaVideoRef.current);
         } else {
-          drawPlaceholder(ctx, 0, 0, halfWidth, targetHeight, isYoutubeIframe ? 'YouTube Video Embed Live' : 'Reaction / Reference Video');
+          drawPlaceholder(ctx, 0, 0, targetWidth, targetHeight, isYoutubeIframe ? 'YouTube Video Live' : 'Reference Video Fullscreen');
+        }
+      } 
+      // 3. PICTURE-IN-PICTURE (PiP Floating Camera)
+      else if (layoutMode === 'pip') {
+        // Draw background media
+        if (hasMedia && mediaVideoRef.current) {
+          drawMedia(ctx, 0, 0, targetWidth, targetHeight, mediaVideoRef.current);
+        } else {
+          drawPlaceholder(ctx, 0, 0, targetWidth, targetHeight, isYoutubeIframe ? 'YouTube Video Live' : 'Reference Media');
         }
 
-        if (rightIsCam) {
-          drawCamera(ctx, halfWidth, 0, halfWidth, targetHeight);
-        } else if (hasMedia && mediaVideoRef.current) {
-          drawMedia(ctx, halfWidth, 0, halfWidth, targetHeight, mediaVideoRef.current);
-        } else {
-          drawPlaceholder(ctx, halfWidth, 0, halfWidth, targetHeight, isYoutubeIframe ? 'YouTube Video Embed Live' : 'Reaction / Reference Video');
-        }
+        // Draw floating PiP camera in bottom-right
+        const pipW = targetWidth * 0.32;
+        const pipH = (pipW * 9) / 16;
+        const pipX = targetWidth - pipW - 32;
+        const pipY = targetHeight - pipH - (showTicker ? 80 : 32);
 
-        // Center Divider
-        ctx.strokeStyle = '#334155';
+        ctx.save();
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 16;
+        ctx.strokeStyle = '#38bdf8';
         ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(halfWidth, 0);
-        ctx.lineTo(halfWidth, targetHeight);
-        ctx.stroke();
+        ctx.strokeRect(pipX, pipY, pipW, pipH);
+        drawCamera(ctx, pipX, pipY, pipW, pipH);
+        ctx.restore();
+      } 
+      // 4. SPLIT STUDIO (Side-by-Side or Top/Bottom)
+      else {
+        if (orientation === 'landscape') {
+          const halfWidth = targetWidth / 2;
+          const leftIsCam = mediaSwapped;
+          const rightIsCam = !mediaSwapped;
 
-      } else {
-        // Portrait (9:16)
-        const halfHeight = targetHeight / 2;
-        const topIsCam = mediaSwapped;
-        const bottomIsCam = !mediaSwapped;
+          if (leftIsCam) {
+            drawCamera(ctx, 0, 0, halfWidth, targetHeight);
+          } else if (hasMedia && mediaVideoRef.current) {
+            drawMedia(ctx, 0, 0, halfWidth, targetHeight, mediaVideoRef.current);
+          } else {
+            drawPlaceholder(ctx, 0, 0, halfWidth, targetHeight, isYoutubeIframe ? 'YouTube Embed Live' : 'Reference Video');
+          }
 
-        if (topIsCam) {
-          drawCamera(ctx, 0, 0, targetWidth, halfHeight);
-        } else if (hasMedia && mediaVideoRef.current) {
-          drawMedia(ctx, 0, 0, targetWidth, halfHeight, mediaVideoRef.current);
+          if (rightIsCam) {
+            drawCamera(ctx, halfWidth, 0, halfWidth, targetHeight);
+          } else if (hasMedia && mediaVideoRef.current) {
+            drawMedia(ctx, halfWidth, 0, halfWidth, targetHeight, mediaVideoRef.current);
+          } else {
+            drawPlaceholder(ctx, halfWidth, 0, halfWidth, targetHeight, isYoutubeIframe ? 'YouTube Embed Live' : 'Reference Video');
+          }
+
+          // Center Divider
+          ctx.strokeStyle = '#334155';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(halfWidth, 0);
+          ctx.lineTo(halfWidth, targetHeight);
+          ctx.stroke();
+
         } else {
-          drawPlaceholder(ctx, 0, 0, targetWidth, halfHeight, isYoutubeIframe ? 'YouTube Video Embed Live' : 'Reaction / Reference Video');
-        }
+          // Portrait (9:16)
+          const halfHeight = targetHeight / 2;
+          const topIsCam = mediaSwapped;
+          const bottomIsCam = !mediaSwapped;
 
-        if (bottomIsCam) {
-          drawCamera(ctx, 0, halfHeight, targetWidth, halfHeight);
-        } else if (hasMedia && mediaVideoRef.current) {
-          drawMedia(ctx, 0, halfHeight, targetWidth, halfHeight, mediaVideoRef.current);
-        } else {
-          drawPlaceholder(ctx, 0, halfHeight, targetWidth, halfHeight, isYoutubeIframe ? 'YouTube Video Embed Live' : 'Reaction / Reference Video');
-        }
+          if (topIsCam) {
+            drawCamera(ctx, 0, 0, targetWidth, halfHeight);
+          } else if (hasMedia && mediaVideoRef.current) {
+            drawMedia(ctx, 0, 0, targetWidth, halfHeight, mediaVideoRef.current);
+          } else {
+            drawPlaceholder(ctx, 0, 0, targetWidth, halfHeight, isYoutubeIframe ? 'YouTube Embed Live' : 'Reference Video');
+          }
 
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(0, halfHeight);
-        ctx.lineTo(targetWidth, halfHeight);
-        ctx.stroke();
+          if (bottomIsCam) {
+            drawCamera(ctx, 0, halfHeight, targetWidth, halfHeight);
+          } else if (hasMedia && mediaVideoRef.current) {
+            drawMedia(ctx, 0, halfHeight, targetWidth, halfHeight, mediaVideoRef.current);
+          } else {
+            drawPlaceholder(ctx, 0, halfHeight, targetWidth, halfHeight, isYoutubeIframe ? 'YouTube Embed Live' : 'Reference Video');
+          }
+
+          ctx.strokeStyle = '#334155';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(0, halfHeight);
+          ctx.lineTo(targetWidth, halfHeight);
+          ctx.stroke();
+        }
       }
 
-      // Draw Custom Brand Logo & Title
-      ctx.save();
-      if (logoImageRef.current) {
-        try {
-          ctx.drawImage(logoImageRef.current, targetWidth - 280, 24, 44, 44);
-        } catch (e) {}
+      // Draw Custom Brand Logo & Title (Only if enabled)
+      if (showLogo) {
+        ctx.save();
+        if (logoImageRef.current) {
+          try {
+            ctx.drawImage(logoImageRef.current, targetWidth - 280, 24, 44, 44);
+          } catch (e) {}
+        }
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px "Space Grotesk", sans-serif';
+        ctx.shadowColor = 'rgba(0,0,0,0.9)';
+        ctx.shadowBlur = 8;
+        ctx.fillText(customLogoText || 'STUDIO', targetWidth - 220, 52);
+        ctx.restore();
       }
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 24px "Space Grotesk", sans-serif';
-      ctx.shadowColor = 'rgba(0,0,0,0.9)';
-      ctx.shadowBlur = 8;
-      ctx.fillText(customLogoText || 'STUDIO', targetWidth - 220, 52);
-      ctx.restore();
 
-      // Draw CNN News Ticker
+      // Draw News Ticker (Only if enabled)
       if (showTicker) {
         const tickerHeight = 56;
         const tickerY = targetHeight - tickerHeight;
@@ -457,7 +521,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     return () => {
       if (renderAnimIdRef.current) cancelAnimationFrame(renderAnimIdRef.current);
     };
-  }, [orientation, activeFilter, brightness, showTicker, tickerText, mediaSwapped, mediaSourceUrl, isYoutubeIframe, cameraEnabled, customLogoText, customLogoUrl]);
+  }, [orientation, layoutMode, activeFilter, brightness, showLogo, customLogoText, customLogoUrl, showTicker, tickerText, mediaSwapped, mediaSourceUrl, isYoutubeIframe, cameraEnabled]);
 
   // Start Canvas + Audio Recording
   const startRecording = async () => {
@@ -480,8 +544,8 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         micGainNodeRef.current = micGain;
       }
 
-      // Media Track with Volume Gain
-      if (mediaVideoRef.current) {
+      // Media Track with Volume Gain (Only if playing media)
+      if (mediaVideoRef.current && layoutMode !== 'solo-camera') {
         try {
           const mediaSource = audioCtx.createMediaElementSource(mediaVideoRef.current);
           const mediaGain = audioCtx.createGain();
@@ -494,21 +558,18 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       }
 
       // Capture 60FPS Video
-      const canvasStream = canvas.captureStream(60);
+      const canvasStream = (canvas as any).captureStream ? (canvas as any).captureStream(60) : null;
 
       const combinedStream = new MediaStream([
-        ...canvasStream.getVideoTracks(),
+        ...(canvasStream ? canvasStream.getVideoTracks() : []),
         ...dest.stream.getAudioTracks()
       ]);
 
-      let mimeType = 'video/webm;codecs=vp9,opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'video/webm';
-      }
+      const mimeType = getSupportedVideoMimeType(selectedFormat === 'mp4' ? 'mp4' : 'webm');
 
       const recorder = new MediaRecorder(combinedStream, {
         mimeType,
-        videoBitsPerSecond: 6000000
+        videoBitsPerSecond: 8000000
       });
 
       recordedChunksRef.current = [];
@@ -519,8 +580,8 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       };
 
       recorder.onstop = () => {
-        const fullBlob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
-        onOpenTrimmer(fullBlob);
+        const fullBlob = new Blob(recordedChunksRef.current, { type: mimeType });
+        onOpenTrimmer(fullBlob, customFileName || 'my_studio_take', selectedFormat);
       };
 
       recorder.start(1000);
@@ -529,7 +590,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       setRecordingSeconds(0);
 
       setIsPlaying(true);
-      if (mediaVideoRef.current) mediaVideoRef.current.play().catch(() => {});
+      if (mediaVideoRef.current && layoutMode !== 'solo-camera') mediaVideoRef.current.play().catch(() => {});
 
       recordIntervalRef.current = setInterval(() => {
         setRecordingSeconds(s => s + 1);
@@ -629,27 +690,86 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       {/* TOP STUDIO HARDWARE & CONTROL BAR */}
       <header className="h-16 px-3 sm:px-4 bg-slate-900/98 border-b border-slate-800 flex items-center justify-between z-30 backdrop-blur-md">
         
-        {/* Left: Branding & Status */}
+        {/* Left: Branding, Take Name & Layout Modes */}
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="p-2 bg-gradient-to-br from-red-600 to-rose-600 text-white rounded-xl shadow-md flex items-center justify-center">
             <Radio className="w-4 h-4 sm:w-5 sm:h-5 animate-pulse" />
           </div>
+          
           <div>
-            <h1 className="font-heading font-black text-xs sm:text-sm tracking-wide text-white flex items-center gap-2">
-              <span>DEBZANE DUAL-STUDIO</span>
-              <span className="text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded-md border border-red-500/30">
-                {orientation.toUpperCase()} ({orientation === 'portrait' ? '9:16' : '16:9'})
-              </span>
-            </h1>
-            <p className="text-[10px] text-slate-400 truncate max-w-[140px] sm:max-w-none">
-              Script: <span className="text-amber-300 font-semibold">{scriptTitle || 'Untitled'}</span>
-            </p>
+            <div className="flex items-center gap-2">
+              <h1 className="font-heading font-black text-xs sm:text-sm tracking-wide text-white">
+                VIDEO STUDIO
+              </h1>
+              
+              {/* Layout Mode Badge Switcher */}
+              <div className="hidden sm:flex items-center gap-1 bg-slate-950 px-1.5 py-0.5 rounded-lg border border-slate-800 text-[11px]">
+                <button
+                  onClick={() => setLayoutMode('solo-camera')}
+                  className={`px-2 py-0.5 rounded-md font-bold transition-all flex items-center gap-1 ${
+                    layoutMode === 'solo-camera' ? 'bg-amber-400 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Solo Camera (Record myself full-screen, no reference video needed)"
+                >
+                  <User className="w-3 h-3" />
+                  <span>Solo Camera</span>
+                </button>
+
+                <button
+                  onClick={() => setLayoutMode('split')}
+                  className={`px-2 py-0.5 rounded-md font-bold transition-all flex items-center gap-1 ${
+                    layoutMode === 'split' ? 'bg-cyan-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Split Studio (50/50 Side-by-Side)"
+                >
+                  <Split className="w-3 h-3" />
+                  <span>Split</span>
+                </button>
+
+                <button
+                  onClick={() => setLayoutMode('pip')}
+                  className={`px-2 py-0.5 rounded-md font-bold transition-all flex items-center gap-1 ${
+                    layoutMode === 'pip' ? 'bg-purple-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Picture-in-Picture Floating Camera"
+                >
+                  <Layers className="w-3 h-3" />
+                  <span>PiP</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+              <span>File:</span>
+              <input
+                type="text"
+                value={customFileName}
+                onChange={(e) => setCustomFileName(e.target.value)}
+                placeholder="Name your video take..."
+                className="bg-transparent border-b border-slate-700 text-amber-300 font-bold focus:outline-none focus:border-amber-400 text-[11px] max-w-[140px] sm:max-w-[180px]"
+                title="Click to rename this video file before saving"
+              />
+              <span className="text-slate-500 font-mono">.{selectedFormat}</span>
+            </div>
           </div>
         </div>
 
-        {/* Center/Right: Prominent Hardware Audio/Video Toggles */}
+        {/* Center/Right: Audio/Video Toggles */}
         <div className="flex items-center gap-1.5 sm:gap-2">
           
+          {/* Format Selector Badge */}
+          <select
+            value={selectedFormat}
+            onChange={(e) => setSelectedFormat(e.target.value as ExportFormat)}
+            className="bg-slate-800 border border-slate-700 text-amber-300 font-mono font-bold text-xs rounded-xl px-2 py-1.5 focus:outline-none"
+            title="Choose default save format (MP4, WebM, MP3, WAV)"
+          >
+            <option value="mp4">MP4 (Universal)</option>
+            <option value="webm">WebM</option>
+            <option value="mp3">MP3 (Audio)</option>
+            <option value="wav">WAV (Lossless)</option>
+          </select>
+
           {/* Microphone Mute Control */}
           <button
             onClick={() => setMicMuted(!micMuted)}
@@ -661,36 +781,24 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             title={micMuted ? 'Click to Unmute Microphone' : 'Click to Mute Microphone'}
           >
             {micMuted ? <MicOff className="w-3.5 h-3.5 text-red-400" /> : <Mic className="w-3.5 h-3.5 text-emerald-400" />}
-            <span className="hidden md:inline">{micMuted ? 'Mic: MUTED' : 'Mic: ON'}</span>
+            <span className="hidden md:inline">{micMuted ? 'Mic: OFF' : 'Mic: ON'}</span>
           </button>
 
-          {/* Speaker / Reference Video Sound Control */}
-          <button
-            onClick={() => setMediaMuted(!mediaMuted)}
-            className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1 text-xs font-semibold transition-all ${
-              mediaMuted 
-                ? 'bg-red-950/80 border-red-500/80 text-red-300' 
-                : 'bg-cyan-950/60 border-cyan-500/60 text-cyan-300'
-            }`}
-            title={mediaMuted ? 'Click to Unmute Reference Sound' : 'Click to Mute Reference Sound'}
-          >
-            {mediaMuted ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
-            <span className="hidden md:inline">{mediaMuted ? 'Video Sound: MUTED' : 'Video Sound: ON'}</span>
-          </button>
-
-          {/* Camera On/Off Toggle */}
-          <button
-            onClick={() => setCameraEnabled(!cameraEnabled)}
-            className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1 text-xs font-semibold transition-all ${
-              !cameraEnabled 
-                ? 'bg-red-950/80 border-red-500/80 text-red-300' 
-                : 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700'
-            }`}
-            title={cameraEnabled ? 'Turn Off Camera' : 'Turn On Camera'}
-          >
-            {!cameraEnabled ? <VideoOff className="w-3.5 h-3.5 text-red-400" /> : <Camera className="w-3.5 h-3.5 text-amber-400" />}
-            <span className="hidden lg:inline">{cameraEnabled ? 'Camera: ON' : 'Camera: OFF'}</span>
-          </button>
+          {/* Reference Video Sound Control (If in split/pip mode) */}
+          {layoutMode !== 'solo-camera' && (
+            <button
+              onClick={() => setMediaMuted(!mediaMuted)}
+              className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1 text-xs font-semibold transition-all ${
+                mediaMuted 
+                  ? 'bg-red-950/80 border-red-500/80 text-red-300' 
+                  : 'bg-cyan-950/60 border-cyan-500/60 text-cyan-300'
+              }`}
+              title={mediaMuted ? 'Click to Unmute Reference Sound' : 'Click to Mute Reference Sound'}
+            >
+              {mediaMuted ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
+              <span className="hidden md:inline">{mediaMuted ? 'Media: OFF' : 'Media: ON'}</span>
+            </button>
+          )}
 
           {/* Orientation Switcher */}
           <button
@@ -702,19 +810,19 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             <span className="hidden xs:inline">{orientation === 'portrait' ? '9:16' : '16:9'}</span>
           </button>
 
-          {/* Custom Logo & News Ticker Drawer Button */}
+          {/* Branding & Ticker Drawer */}
           <button
             onClick={() => setShowSettingsDrawer(!showSettingsDrawer)}
             className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all ${
               showSettingsDrawer ? 'bg-cyan-500 text-slate-950 border-cyan-400' : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
             }`}
-            title="Custom Logo & News Ticker Settings"
+            title="Custom Logo & Watermark Settings"
           >
             <ImageIcon className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Logo & Ticker</span>
+            <span className="hidden sm:inline">Branding</span>
           </button>
 
-          {/* Edit Script Drawer Button */}
+          {/* Script Drawer */}
           <button
             onClick={() => setShowScriptDrawer(!showScriptDrawer)}
             className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all ${
@@ -735,44 +843,72 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         </div>
       </header>
 
-      {/* Logo & Ticker Customization Settings Drawer */}
+      {/* Branding & Watermark Settings Drawer */}
       {showSettingsDrawer && (
         <div className="bg-slate-900/98 border-b border-slate-700 p-4 z-40 grid grid-cols-1 md:grid-cols-3 gap-4 max-h-[40vh] overflow-y-auto text-xs animate-in slide-in-from-top-2">
           
-          {/* Custom Logo Upload */}
+          {/* Watermark / Logo Customization & Toggle */}
           <div className="space-y-2 bg-slate-950/80 p-3 rounded-xl border border-slate-800">
-            <span className="font-bold text-cyan-300 flex items-center gap-1.5">
-              <ImageIcon className="w-4 h-4 text-cyan-400" />
-              <span>Change Logo Here:</span>
-            </span>
-            <div className="flex items-center gap-2">
-              <img src={customLogoUrl} alt="Logo Preview" className="w-10 h-10 object-contain rounded-lg border border-slate-700 bg-slate-900" />
-              <label className="flex-1 py-2 px-3 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 rounded-xl cursor-pointer text-center font-bold">
-                <span>Upload Custom Logo</span>
-                <input type="file" accept="image/*" onChange={handleCustomLogoUpload} className="hidden" />
-              </label>
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-cyan-300 flex items-center gap-1.5">
+                <ImageIcon className="w-4 h-4 text-cyan-400" />
+                <span>Watermark / Brand Logo:</span>
+              </span>
+              <button
+                onClick={() => setShowLogo(!showLogo)}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
+                  showLogo ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                {showLogo ? 'Logo: ON' : 'Clean (NO LOGO)'}
+              </button>
             </div>
-            <input
-              type="text"
-              value={customLogoText}
-              onChange={(e) => setCustomLogoText(e.target.value)}
-              placeholder="Brand Label (e.g. DEBZANE STUDIO)"
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
-            />
+
+            {showLogo && (
+              <>
+                <div className="flex items-center gap-2 pt-1">
+                  <img src={customLogoUrl} alt="Logo Preview" className="w-10 h-10 object-contain rounded-lg border border-slate-700 bg-slate-900" />
+                  <label className="flex-1 py-2 px-3 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 rounded-xl cursor-pointer text-center font-bold">
+                    <span>Upload Custom Logo</span>
+                    <input type="file" accept="image/*" onChange={handleCustomLogoUpload} className="hidden" />
+                  </label>
+                </div>
+                <input
+                  type="text"
+                  value={customLogoText}
+                  onChange={(e) => setCustomLogoText(e.target.value)}
+                  placeholder="Brand Label (e.g. MY CHANNEL)"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white"
+                />
+              </>
+            )}
           </div>
 
-          {/* Scrolling News Ticker Editor */}
+          {/* Scrolling News Ticker Editor & Toggle */}
           <div className="space-y-2 bg-slate-950/80 p-3 rounded-xl border border-slate-800 md:col-span-2">
-            <span className="font-bold text-amber-300 flex items-center gap-1.5">
-              <Type className="w-4 h-4 text-amber-400" />
-              <span>Edit Scrolling Bottom News Ticker:</span>
-            </span>
-            <textarea
-              value={tickerText}
-              onChange={(e) => setTickerText(e.target.value)}
-              placeholder="Enter custom phone number, booking info, or breaking headlines..."
-              className="w-full p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white resize-none h-16"
-            />
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                <Type className="w-4 h-4 text-amber-400" />
+                <span>Bottom Scrolling News Ticker:</span>
+              </span>
+              <button
+                onClick={() => setShowTicker(!showTicker)}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
+                  showTicker ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                {showTicker ? 'Ticker: ON' : 'Ticker: OFF'}
+              </button>
+            </div>
+
+            {showTicker && (
+              <textarea
+                value={tickerText}
+                onChange={(e) => setTickerText(e.target.value)}
+                placeholder="Enter custom phone number, booking info, or breaking headlines..."
+                className="w-full p-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white resize-none h-16"
+              />
+            )}
           </div>
 
         </div>
@@ -794,18 +930,18 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         </div>
       )}
 
-      {/* Media Input Link & Upload Bar with Real-time Volume Controls */}
+      {/* Media Input Link & Upload Bar (Only shown when not strictly solo camera or if user wants reference) */}
       <div className="bg-slate-900/90 border-b border-slate-800 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs z-20">
         
         {/* URL Input */}
         <div className="flex-1 flex items-center gap-1.5 min-w-[280px]">
           <span className="text-slate-400 font-bold hidden sm:inline flex items-center gap-1">
             <Link className="w-3.5 h-3.5 text-amber-400" />
-            <span>Load Video:</span>
+            <span>Reference Media:</span>
           </span>
           <input
             type="text"
-            placeholder="Paste YouTube link (e.g. watch?v=..., youtu.be, shorts), Facebook, or MP4 URL..."
+            placeholder="Paste YouTube (watch/shorts/youtu.be) or MP4 link (Optional)..."
             value={onlineInputUrl}
             onChange={(e) => setOnlineInputUrl(e.target.value)}
             className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white focus:outline-none focus:border-amber-400"
@@ -814,11 +950,11 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             onClick={handleApplyOnlineUrl}
             className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl"
           >
-            Load Video
+            Load
           </button>
           <label className="px-3 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl cursor-pointer text-slate-200 flex items-center gap-1">
             <Upload className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden sm:inline">Upload File</span>
+            <span className="hidden sm:inline">Upload Video</span>
             <input type="file" accept="video/*,audio/*" onChange={handleFileUpload} className="hidden" />
           </label>
         </div>
@@ -841,18 +977,20 @@ export const StudioModal: React.FC<StudioModalProps> = ({
           </div>
 
           {/* Video Audio Volume */}
-          <div className="flex items-center gap-1.5" title="Video Soundtrack Volume">
-            <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
-            <input
-              type="range"
-              min={0}
-              max={2}
-              step={0.1}
-              value={mediaVolume}
-              onChange={(e) => setMediaVolume(Number(e.target.value))}
-              className="w-14 sm:w-16 accent-cyan-400 cursor-pointer h-1.5 bg-slate-700 rounded-lg"
-            />
-          </div>
+          {layoutMode !== 'solo-camera' && (
+            <div className="flex items-center gap-1.5" title="Reference Video Sound Volume">
+              <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
+              <input
+                type="range"
+                min={0}
+                max={2}
+                step={0.1}
+                value={mediaVolume}
+                onChange={(e) => setMediaVolume(Number(e.target.value))}
+                className="w-14 sm:w-16 accent-cyan-400 cursor-pointer h-1.5 bg-slate-700 rounded-lg"
+              />
+            </div>
+          )}
 
         </div>
 
@@ -861,7 +999,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
       {/* Main Studio Compositor Stage */}
       <main className="flex-1 relative flex items-center justify-center bg-black overflow-hidden p-2">
         
-        {/* The Live 60FPS Composited Canvas (This is what gets recorded with baked-in filters & split screen) */}
+        {/* The Live 60FPS Composited Canvas */}
         <div className={`relative max-w-full max-h-full flex items-center justify-center rounded-2xl overflow-hidden border border-slate-800 shadow-2xl ${orientation === 'portrait' ? 'aspect-[9/16]' : 'aspect-[16/9]'}`}>
           
           <canvas
@@ -869,13 +1007,15 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             className="w-full h-full object-contain"
           />
 
-          {/* YouTube Embed Player Layer (If YouTube URL is loaded) */}
-          {isYoutubeIframe && youtubeEmbedId && (
+          {/* YouTube Embed Player Layer (If YouTube URL is loaded in split/pip mode) */}
+          {isYoutubeIframe && youtubeEmbedId && layoutMode !== 'solo-camera' && (
             <div 
               className={`absolute z-10 overflow-hidden ${
-                orientation === 'portrait' 
-                  ? (mediaSwapped ? 'bottom-0 left-0 right-0 h-1/2' : 'top-0 left-0 right-0 h-1/2')
-                  : (mediaSwapped ? 'top-0 right-0 bottom-0 w-1/2' : 'top-0 left-0 bottom-0 w-1/2')
+                layoutMode === 'pip'
+                  ? 'inset-0'
+                  : orientation === 'portrait' 
+                    ? (mediaSwapped ? 'bottom-0 left-0 right-0 h-1/2' : 'top-0 left-0 right-0 h-1/2')
+                    : (mediaSwapped ? 'top-0 right-0 bottom-0 w-1/2' : 'top-0 left-0 bottom-0 w-1/2')
               }`}
             >
               <iframe
@@ -1007,7 +1147,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
               activeFilter === 'monochrome' ? 'bg-slate-200 text-slate-950 shadow-md' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
             }`}
           >
-            Monochrome
+            Noir B&W
           </button>
 
           <button
@@ -1016,7 +1156,7 @@ export const StudioModal: React.FC<StudioModalProps> = ({
               activeFilter === 'none' ? 'bg-slate-700 text-white' : 'bg-slate-800/60 text-slate-400'
             }`}
           >
-            Normal (No Filter)
+            Normal (Raw)
           </button>
         </div>
 
@@ -1037,15 +1177,17 @@ export const StudioModal: React.FC<StudioModalProps> = ({
             />
           </div>
 
-          {/* Swap Panels */}
-          <button
-            onClick={() => setMediaSwapped(!mediaSwapped)}
-            className="p-1.5 sm:p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 flex items-center gap-1 transition-colors text-[11px]"
-            title="Swap Panels (Left/Right or Top/Bottom)"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Swap</span>
-          </button>
+          {/* Swap Panels (Split Mode) */}
+          {layoutMode === 'split' && (
+            <button
+              onClick={() => setMediaSwapped(!mediaSwapped)}
+              className="p-1.5 sm:p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 flex items-center gap-1 transition-colors text-[11px]"
+              title="Swap Panels (Left/Right or Top/Bottom)"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Swap</span>
+            </button>
+          )}
 
           {/* Speed Slider */}
           <div className="flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-xl border border-slate-700">

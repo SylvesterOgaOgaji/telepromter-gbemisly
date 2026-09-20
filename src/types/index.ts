@@ -54,6 +54,9 @@ export interface FeedbackComment {
 }
 
 export type VideoFilter = 'none' | 'beauty' | 'cinematic' | 'matrix' | 'monochrome' | 'vibrant' | 'sepia';
+export type StudioLayoutMode = 'solo-camera' | 'split' | 'pip' | 'solo-media';
+export type ExportFormat = 'mp4' | 'webm' | 'mp3' | 'wav';
+export type ExportResolution = '4k' | '1080p' | '720p';
 
 export interface StudioOverlayConfig {
   showTicker: boolean;
@@ -65,6 +68,6 @@ export interface StudioOverlayConfig {
   logoUrl: string;
   logoPosition: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   filter: VideoFilter;
-  layout: 'split-h' | 'split-v' | 'pip' | 'prompter-only';
+  layout: StudioLayoutMode;
   mediaSwapped: boolean;
 }
