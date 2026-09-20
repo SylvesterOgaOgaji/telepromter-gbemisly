@@ -1,10 +1,34 @@
 /**
- * Universal Media Export & Audio Processing Utility
- * Supports MP4, WebM, MP3, and WAV with browser-native Web Audio & MediaRecorder APIs
+ * Universal Media Export, Audio Processing & Clean Metadata Packaging Utility
+ * Supports MP4, WebM, MP3, WAV, VTT Subtitles, SRT, TXT Social Descriptions, and JSON Meta Packages.
+ * 100% Client-side and Deterministic (Zero AI Dependencies).
  */
 
 export type ExportFormat = 'mp4' | 'webm' | 'mp3' | 'wav';
 export type ExportResolution = '4k' | '1080p' | '720p';
+
+export interface VideoMetadata {
+  title: string;
+  description: string;
+  scriptContent?: string;
+  tags: string[];
+  creatorName?: string;
+  organization?: string;
+  partner?: string;
+  recordingDate?: string;
+  durationSeconds?: number;
+  resolution?: string;
+  format?: string;
+  opaySupportAccount?: string;
+  license?: string;
+}
+
+export interface ExportBundleOptions {
+  downloadVideo: boolean;
+  downloadMetaTxt: boolean;
+  downloadSubtitlesVtt: boolean;
+  downloadJsonMeta: boolean;
+}
 
 /**
  * Detect the optimal supported MIME type for video recording
@@ -57,7 +81,6 @@ export async function extractAudioFromVideoBlob(videoBlob: Blob, format: 'wav' |
     const wavBlob = audioBufferToWav(audioBuffer);
     
     if (format === 'mp3') {
-      // Return high-compatibility audio blob with audio/mpeg or audio/wav container
       return new Blob([wavBlob], { type: 'audio/mp3' });
     }
     return wavBlob;
@@ -134,4 +157,171 @@ function writeString(view: DataView, offset: number, string: string) {
 export function sanitizeFileName(name: string, fallback: string = 'studio_recording'): string {
   const clean = name.trim().replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_');
   return clean || fallback;
+}
+
+/**
+ * Generate a complete, ready-to-publish social & YouTube description writeup with meta tags
+ */
+export function generateMetadataText(meta: VideoMetadata): string {
+  const now = meta.recordingDate || new Date().toLocaleString();
+  const creator = meta.creatorName || 'Debzane Concepts Creator';
+  const org = meta.organization || 'Debzane Concepts';
+  const partner = meta.partner || 'JV ImpactVR Initiative LTD/GTE';
+  const opay = meta.opaySupportAccount || '8057961025 (Sylvester Oga Ogaji)';
+
+  const formattedTags = (meta.tags && meta.tags.length > 0)
+    ? meta.tags.map(t => t.startsWith('#') ? t : `#${t.replace(/\s+/g, '')}`).join(' ')
+    : '#DebzaneConcepts #Teleprompter #StudioRecording #ContentCreation #VideoProduction';
+
+  const commaTags = (meta.tags && meta.tags.length > 0)
+    ? meta.tags.map(t => t.replace(/^#/, '').trim()).join(', ')
+    : 'Debzane Concepts, Teleprompter, Video Studio, Content Creation, Public Speaking';
+
+  return `================================================================================
+🎬 VIDEO TITLE:
+${meta.title || 'Untitled Studio Production'}
+================================================================================
+
+📌 SYNOPSIS & DESCRIPTION:
+${meta.description || meta.scriptContent?.slice(0, 200) || 'Official video recording produced using Debzane Concept Teleprompter Studio.'}
+
+--------------------------------------------------------------------------------
+📝 TELEPROMPTER SCRIPT / SPEECH WRITE-UP:
+--------------------------------------------------------------------------------
+${meta.scriptContent || 'No teleprompter script write-up provided.'}
+
+--------------------------------------------------------------------------------
+🏷️ SOCIAL HASHTAGS:
+${formattedTags}
+
+🏷️ SEO / YOUTUBE TAGS (COPY & PASTE):
+${commaTags}
+
+--------------------------------------------------------------------------------
+📊 PRODUCTION & TECHNICAL METADATA:
+--------------------------------------------------------------------------------
+• Title: ${meta.title || 'Studio Video'}
+• Recorded On: ${now}
+• Duration: ${meta.durationSeconds ? `${Math.floor(meta.durationSeconds / 60)}m ${Math.floor(meta.durationSeconds % 60)}s` : 'Full Take'}
+• Resolution: ${meta.resolution || '1080p Full HD'}
+• Export Format: ${(meta.format || 'mp4').toUpperCase()}
+• Creator / Presenter: ${creator}
+• Produced with: Debzane Concept Teleprompter v2.4 (100% Free & Open)
+• Organization: ${org}
+• Technology Partner: ${partner}
+• Developer: Sylvester Oga Ogaji
+• Support & Donations: OPay ${opay}
+• License: ${meta.license || 'Creative Commons Attribution / Personal & Commercial Creator License'}
+================================================================================`;
+}
+
+/**
+ * Generate JSON-LD / schema.org compatible metadata file
+ */
+export function generateMetadataJSON(meta: VideoMetadata): string {
+  const jsonObject = {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    "name": meta.title || "Debzane Studio Video",
+    "description": meta.description || meta.scriptContent || "Debzane Concept Teleprompter Recording",
+    "uploadDate": meta.recordingDate || new Date().toISOString(),
+    "duration": meta.durationSeconds ? `PT${Math.floor(meta.durationSeconds)}S` : undefined,
+    "encodingFormat": meta.format === 'mp4' ? 'video/mp4' : meta.format === 'webm' ? 'video/webm' : 'audio/mp3',
+    "videoQuality": meta.resolution || "1080p",
+    "transcript": meta.scriptContent || "",
+    "keywords": meta.tags || ["Debzane Concepts", "Teleprompter", "Video Studio"],
+    "author": {
+      "@type": "Person",
+      "name": meta.creatorName || "Debzane Concept Creator"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": meta.organization || "Debzane Concepts",
+      "founder": "Gbemisly",
+      "sponsor": meta.partner || "JV ImpactVR Initiative LTD/GTE",
+      "supportDonationOPay": meta.opaySupportAccount || "8057961025"
+    }
+  };
+
+  return JSON.stringify(jsonObject, null, 2);
+}
+
+/**
+ * Generate standard WebVTT subtitles (.vtt) from script text and duration
+ */
+export function generateVTTSubtitles(scriptContent: string = '', durationSeconds: number = 30): string {
+  if (!scriptContent.trim()) {
+    return "WEBVTT\n\n1\n00:00:00.000 --> 00:00:05.000\nDebzane Concept Studio Recording\n";
+  }
+
+  // Split script into manageable sentences or chunks
+  const sentences = scriptContent
+    .replace(/\r\n/g, '\n')
+    .split(/\n+/)
+    .flatMap(line => line.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [line])
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+
+  if (sentences.length === 0) {
+    return "WEBVTT\n\n1\n00:00:00.000 --> 00:00:05.000\n" + scriptContent.trim() + "\n";
+  }
+
+  const effectiveDuration = durationSeconds > 0 ? durationSeconds : 30;
+  const timePerChunk = Math.max(2, effectiveDuration / sentences.length);
+
+  let vtt = "WEBVTT - Debzane Concept Subtitles\n\n";
+
+  sentences.forEach((sentence, idx) => {
+    const startSec = idx * timePerChunk;
+    const endSec = Math.min(effectiveDuration, (idx + 1) * timePerChunk);
+
+    vtt += `${idx + 1}\n`;
+    vtt += `${formatVTTTime(startSec)} --> ${formatVTTTime(endSec)}\n`;
+    vtt += `${sentence}\n\n`;
+  });
+
+  return vtt;
+}
+
+function formatVTTTime(seconds: number): string {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+  const ms = Math.floor((seconds % 1) * 1000);
+
+  const hh = hrs.toString().padStart(2, '0');
+  const mm = mins.toString().padStart(2, '0');
+  const ss = secs.toString().padStart(2, '0');
+  const mmm = ms.toString().padStart(3, '0');
+
+  return `${hh}:${mm}:${ss}.${mmm}`;
+}
+
+/**
+ * Trigger download of any text / string content with specified filename & MIME
+ */
+export function downloadTextFile(content: string, filename: string, mimeType: string = 'text/plain;charset=utf-8') {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Trigger download of a Blob file
+ */
+export function downloadBlobFile(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }

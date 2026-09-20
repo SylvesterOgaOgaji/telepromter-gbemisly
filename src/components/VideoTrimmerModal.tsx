@@ -6,32 +6,40 @@ import {
   Download, 
   X, 
   RotateCcw, 
-  Sparkles,
-  Film,
-  Volume2,
-  VolumeX,
-  Music,
-  Plus,
-  Type,
-  Layers,
-  Settings,
-  Zap,
-  CheckCircle2,
-  Sliders,
-  FileVideo,
-  FileAudio
+  Sparkles, 
+  Film, 
+  Music, 
+  Type, 
+  Settings, 
+  Zap, 
+  CheckCircle2, 
+  Check,
+  FileVideo, 
+  FileAudio,
+  Tag,
+  Copy,
+  FileText,
+  ShieldCheck,
+  Share2
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { ExportFormat, ExportResolution, VideoFilter } from '../types';
 import { 
   getSupportedVideoMimeType, 
   extractAudioFromVideoBlob, 
-  sanitizeFileName 
+  sanitizeFileName,
+  generateMetadataText,
+  generateMetadataJSON,
+  generateVTTSubtitles,
+  downloadTextFile,
+  VideoMetadata
 } from '../utils/mediaExport';
 
 interface VideoTrimmerModalProps {
   videoBlob: Blob;
   initialFileName?: string;
   initialFormat?: ExportFormat;
+  initialMetadata?: VideoMetadata;
   onClose: () => void;
   onSave: (exportedBlob: Blob, filename: string) => void;
 }
@@ -40,6 +48,7 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
   videoBlob,
   initialFileName = 'my_studio_recording',
   initialFormat = 'mp4',
+  initialMetadata,
   onClose,
   onSave
 }) => {
@@ -70,6 +79,26 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
   // Post-Processing Visual Filter
   const [postFilter, setPostFilter] = useState<VideoFilter>('none');
 
+  // Metadata & Social Description State (100% Deterministic / No-AI)
+  const [videoTitle, setVideoTitle] = useState<string>(
+    initialMetadata?.title || initialFileName || 'Debzane Studio Production'
+  );
+  const [videoDescription, setTakeDescription] = useState<string>(
+    initialMetadata?.description || 'Official video recording produced with Debzane Concept Teleprompter Studio.'
+  );
+  const [scriptWriteup, setScriptWriteup] = useState<string>(
+    initialMetadata?.scriptContent || ''
+  );
+  const [tagsString, setTagsString] = useState<string>(
+    initialMetadata?.tags?.join(', ') || 'DebzaneConcepts, Teleprompter, VideoCreation, Speaking, StudioTake'
+  );
+  const [copiedMeta, setCopiedMeta] = useState<boolean>(false);
+
+  // Package Sidecar Options
+  const [includeMetaSidecar, setIncludeMetaSidecar] = useState<boolean>(true);
+  const [includeVttSubtitles, setIncludeVttSubtitles] = useState<boolean>(true);
+  const [includeJsonMeta, setIncludeJsonMeta] = useState<boolean>(true);
+
   // Multi-Format Export Options
   const [fileName, setFileName] = useState<string>(sanitizeFileName(initialFileName));
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>(initialFormat);
@@ -78,7 +107,7 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
   const [progressPercent, setProgressPercent] = useState<number>(0);
 
   // Active Tool Tab
-  const [activeTab, setActiveTab] = useState<'trim' | 'audio' | 'text' | 'filter' | 'format'>('format');
+  const [activeTab, setActiveTab] = useState<'format' | 'metadata' | 'trim' | 'audio' | 'text' | 'filter'>('format');
 
   // Secondary Joined Clip
   const [secondaryVideoUrl, setSecondaryVideoUrl] = useState<string>('');
@@ -155,14 +184,6 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
     setBgAudioName(file.name);
   };
 
-  const handleSecondaryVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setSecondaryVideoUrl(url);
-    setSecondaryVideoName(file.name);
-  };
-
   const getFilterStyle = () => {
     switch (postFilter) {
       case 'beauty':
@@ -182,14 +203,67 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
     }
   };
 
+  const handleCopyMeta = () => {
+    const currentMeta: VideoMetadata = {
+      title: videoTitle || fileName,
+      description: videoDescription,
+      scriptContent: scriptWriteup,
+      tags: tagsString.split(/[,#\s]+/).filter(Boolean),
+      recordingDate: new Date().toLocaleString(),
+      durationSeconds: Math.max(0, endTime - startTime) || duration,
+      resolution: selectedResolution,
+      format: selectedFormat,
+      creatorName: 'Debzane Creator',
+      organization: 'Debzane Concepts',
+      partner: 'JV ImpactVR Initiative LTD/GTE',
+      opaySupportAccount: '8057961025'
+    };
+
+    const formatted = generateMetadataText(currentMeta);
+    navigator.clipboard.writeText(formatted).then(() => {
+      setCopiedMeta(true);
+      setTimeout(() => setCopiedMeta(false), 3000);
+    });
+  };
+
   // Master CapCut Export Engine
   const handleExport = async () => {
     setIsProcessing(true);
     setProgressPercent(10);
 
-    const safeName = sanitizeFileName(fileName || 'my_studio_take');
+    const safeName = sanitizeFileName(videoTitle || fileName || 'my_studio_take');
     const extension = selectedFormat;
     const finalFileName = `${safeName}.${extension}`;
+
+    const effectiveDuration = Math.max(0, endTime - startTime) || duration || 30;
+
+    const currentMeta: VideoMetadata = {
+      title: videoTitle || fileName,
+      description: videoDescription,
+      scriptContent: scriptWriteup,
+      tags: tagsString.split(/[,#\s]+/).filter(Boolean),
+      recordingDate: new Date().toLocaleString(),
+      durationSeconds: effectiveDuration,
+      resolution: selectedResolution,
+      format: selectedFormat,
+      creatorName: 'Debzane Creator',
+      organization: 'Debzane Concepts',
+      partner: 'JV ImpactVR Initiative LTD/GTE',
+      opaySupportAccount: '8057961025'
+    };
+
+    // Helper to download sidecars
+    const downloadSidecars = () => {
+      if (includeMetaSidecar) {
+        downloadTextFile(generateMetadataText(currentMeta), `${safeName}_description.txt`);
+      }
+      if (includeVttSubtitles && scriptWriteup.trim()) {
+        downloadTextFile(generateVTTSubtitles(scriptWriteup, effectiveDuration), `${safeName}_subtitles.vtt`, 'text/vtt');
+      }
+      if (includeJsonMeta) {
+        downloadTextFile(generateMetadataJSON(currentMeta), `${safeName}_meta.json`, 'application/json');
+      }
+    };
 
     // 1. Audio-only exports (MP3 / WAV)
     if (selectedFormat === 'mp3' || selectedFormat === 'wav') {
@@ -198,6 +272,8 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
         const audioBlob = await extractAudioFromVideoBlob(videoBlob, selectedFormat);
         setProgressPercent(100);
         onSave(audioBlob, finalFileName);
+        downloadSidecars();
+        confetti({ particleCount: 40, spread: 60, origin: { y: 0.7 } });
         setIsProcessing(false);
         return;
       } catch (err) {
@@ -283,6 +359,8 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
         const finalBlob = new Blob(chunks, { type: mimeType });
         setProgressPercent(100);
         onSave(finalBlob, finalFileName);
+        downloadSidecars();
+        confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 } });
         setIsProcessing(false);
       };
 
@@ -305,9 +383,24 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, targetW, targetH);
 
+        // Aspect-ratio preserving cover-crop draw
+        const natW = video.videoWidth || targetW;
+        const natH = video.videoHeight || targetH;
+        const imgRatio = natW / natH;
+        const targetRatio = targetW / targetH;
+        let sx = 0, sy = 0, sWidth = natW, sHeight = natH;
+
+        if (imgRatio > targetRatio) {
+          sWidth = natH * targetRatio;
+          sx = (natW - sWidth) / 2;
+        } else {
+          sHeight = natW / targetRatio;
+          sy = (natH - sHeight) / 2;
+        }
+
         // Apply filter
         ctx.filter = getFilterStyle();
-        ctx.drawImage(video, 0, 0, targetW, targetH);
+        ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, targetW, targetH);
         ctx.filter = 'none';
 
         // Draw Text Overlay
@@ -344,6 +437,7 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
     } catch (err) {
       console.warn('Canvas export fallback, saving original container:', err);
       onSave(videoBlob, finalFileName);
+      downloadSidecars();
       setIsProcessing(false);
     }
   };
@@ -373,11 +467,11 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
                   CapCut-Grade Pro Video Editor & Exporter
                 </h2>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono font-bold">
-                  UNIVERSAL COMPATIBILITY
+                  DIRECT & PACKAGE EXPORT
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Trim clips, mix background music, add captions, apply filters, and export to MP4, MP3, 4K & HD for all devices.
+                Trim clips, mix background music, add captions, apply filters, and export to MP4, MP3, 4K with complete writeup & meta tags.
               </p>
             </div>
           </div>
@@ -390,7 +484,7 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
         </div>
 
         {/* Video Player Display */}
-        <div className="my-3 relative rounded-2xl overflow-hidden bg-black flex items-center justify-center aspect-video max-h-[42vh] border border-slate-800 shadow-inner">
+        <div className="my-3 relative rounded-2xl overflow-hidden bg-black flex items-center justify-center aspect-video max-h-[40vh] border border-slate-800 shadow-inner">
           <video
             ref={videoRef}
             src={videoUrl}
@@ -434,6 +528,16 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
           >
             <Download className="w-3.5 h-3.5" />
             <span>Format & Export Preset</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('metadata')}
+            className={`px-3.5 py-2 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 shrink-0 ${
+              activeTab === 'metadata' ? 'border-amber-400 text-amber-400 bg-amber-400/5' : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Tag className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Write-Up & Meta Tags</span>
           </button>
 
           <button
@@ -488,14 +592,17 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
               <div>
                 <label className="block text-slate-300 font-bold text-xs mb-1.5 flex items-center gap-1.5">
                   <Settings className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Custom File Name (Personalize Your Video):</span>
+                  <span>Custom File Name (Personalize Your Video Title):</span>
                 </label>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
-                    value={fileName}
-                    onChange={(e) => setFileName(e.target.value)}
-                    placeholder="Enter your name or project title (e.g. Samuel_YouTube_Take_1)"
+                    value={videoTitle}
+                    onChange={(e) => {
+                      setVideoTitle(e.target.value);
+                      setFileName(sanitizeFileName(e.target.value));
+                    }}
+                    placeholder="Enter your video title (e.g. Debzane_Leadership_Speech)"
                     className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-400"
                   />
                   <span className="px-3 py-2 bg-slate-800 rounded-xl text-amber-300 font-mono text-xs font-bold border border-slate-700">
@@ -610,10 +717,139 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
                 </div>
               )}
 
+              {/* Sidecar Metadata Bundle Options */}
+              <div className="p-3.5 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-amber-400" />
+                    <span>Sidecar Metadata & Subtitle Packaging:</span>
+                  </span>
+                  <button
+                    onClick={() => setActiveTab('metadata')}
+                    className="text-[11px] text-amber-400 hover:underline font-semibold"
+                  >
+                    Edit Write-Up & Tags →
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                  <label className="flex items-center gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800 cursor-pointer hover:border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={includeMetaSidecar}
+                      onChange={(e) => setIncludeMetaSidecar(e.target.checked)}
+                      className="accent-amber-400 w-4 h-4 rounded"
+                    />
+                    <span className="text-slate-300 font-medium">Social Description (<strong>.txt</strong>)</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800 cursor-pointer hover:border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={includeVttSubtitles}
+                      onChange={(e) => setIncludeVttSubtitles(e.target.checked)}
+                      className="accent-amber-400 w-4 h-4 rounded"
+                    />
+                    <span className="text-slate-300 font-medium">Subtitles Captions (<strong>.vtt</strong>)</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-800 cursor-pointer hover:border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={includeJsonMeta}
+                      onChange={(e) => setIncludeJsonMeta(e.target.checked)}
+                      className="accent-amber-400 w-4 h-4 rounded"
+                    />
+                    <span className="text-slate-300 font-medium">Video Schema (<strong>.json</strong>)</span>
+                  </label>
+                </div>
+              </div>
+
             </div>
           )}
 
-          {/* TAB 2: Cut & Trim Timeline */}
+          {/* TAB 2: Write-Up & Meta Tags Management */}
+          {activeTab === 'metadata' && (
+            <div className="space-y-3.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <Tag className="w-4 h-4 text-cyan-400" />
+                  <span>Video Title, Description & Social Write-Up:</span>
+                </span>
+
+                <button
+                  onClick={handleCopyMeta}
+                  className="px-3 py-1.5 text-xs font-bold text-amber-300 bg-amber-950/60 hover:bg-amber-900/60 border border-amber-500/40 rounded-xl flex items-center gap-1.5 transition-all"
+                >
+                  {copiedMeta ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedMeta ? 'Copied to Clipboard!' : 'Copy Social Meta'}</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* Left: Inputs */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Video Title:
+                    </label>
+                    <input
+                      type="text"
+                      value={videoTitle}
+                      onChange={(e) => setVideoTitle(e.target.value)}
+                      placeholder="Title of this production..."
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Synopsis / Description:
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={videoDescription}
+                      onChange={(e) => setTakeDescription(e.target.value)}
+                      placeholder="Summary of what this video discusses..."
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400 resize-none font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Meta Tags & Hashtags (Comma Separated):
+                    </label>
+                    <input
+                      type="text"
+                      value={tagsString}
+                      onChange={(e) => setTagsString(e.target.value)}
+                      placeholder="DebzaneConcepts, Teleprompter, PublicSpeaking"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-cyan-300 font-mono focus:outline-none focus:border-cyan-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Right: Teleprompter Speech Write-Up */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1 flex items-center justify-between">
+                    <span>Teleprompter Speech Write-Up (Transcript):</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Used for .vtt subtitles</span>
+                  </label>
+                  <textarea
+                    rows={8}
+                    value={scriptWriteup}
+                    onChange={(e) => setScriptWriteup(e.target.value)}
+                    placeholder="Full speech text read during the recording..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-300 focus:outline-none focus:border-amber-400 resize-none font-sans"
+                  />
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: Cut & Trim Timeline */}
           {activeTab === 'trim' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
@@ -686,7 +922,7 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: Background Audio Mixing */}
+          {/* TAB 4: Background Audio Mixing */}
           {activeTab === 'audio' && (
             <div className="space-y-3">
               <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
@@ -748,7 +984,7 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
             </div>
           )}
 
-          {/* TAB 4: Text Overlay & Captions */}
+          {/* TAB 5: Text Overlay & Captions */}
           {activeTab === 'text' && (
             <div className="space-y-3">
               <div>
@@ -808,7 +1044,7 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
             </div>
           )}
 
-          {/* TAB 5: Color Filters & Playback Speed */}
+          {/* TAB 6: Color Filters & Playback Speed */}
           {activeTab === 'filter' && (
             <div className="space-y-3">
               <div>
@@ -881,12 +1117,12 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
             {isProcessing ? (
               <>
                 <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
-                <span>Exporting {selectedFormat.toUpperCase()} ({selectedResolution})...</span>
+                <span>Exporting Clean Package ({selectedFormat.toUpperCase()})...</span>
               </>
             ) : (
               <>
                 <Download className="w-4 h-4" />
-                <span>Save & Download ({selectedFormat.toUpperCase()} • {selectedResolution})</span>
+                <span>Save & Export Clean Package ({selectedFormat.toUpperCase()} • {selectedResolution})</span>
               </>
             )}
           </button>

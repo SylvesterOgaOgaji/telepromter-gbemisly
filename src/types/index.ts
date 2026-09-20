@@ -71,3 +71,20 @@ export interface StudioOverlayConfig {
   layout: StudioLayoutMode;
   mediaSwapped: boolean;
 }
+
+export interface VideoMetadata {
+  title: string;
+  description: string;
+  scriptContent?: string;
+  tags: string[];
+  creatorName?: string;
+  organization?: string;
+  partner?: string;
+  recordingDate?: string;
+  durationSeconds?: number;
+  resolution?: string;
+  format?: string;
+  opaySupportAccount?: string;
+  license?: string;
+}
+

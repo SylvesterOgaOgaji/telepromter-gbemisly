@@ -47,10 +47,26 @@ import {
   Search,
   Move,
   Minimize2,
-  Maximize2
+  Maximize2,
+  Copy,
+  FileText,
+  CheckCircle2,
+  Share2,
+  CornerDownRight,
+  Tag,
+  Scissors
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { getSupportedVideoMimeType, sanitizeFileName } from '../utils/mediaExport';
+import { 
+  getSupportedVideoMimeType, 
+  sanitizeFileName, 
+  generateMetadataText, 
+  generateMetadataJSON, 
+  generateVTTSubtitles, 
+  downloadTextFile, 
+  downloadBlobFile,
+  VideoMetadata
+} from '../utils/mediaExport';
 
 interface StudioModalProps {
   isOpen: boolean;
@@ -58,7 +74,7 @@ interface StudioModalProps {
   script: Script;
   settings: PrompterSettings;
   onUpdateSetting: <K extends keyof PrompterSettings>(key: K, value: PrompterSettings[K]) => void;
-  onOpenTrimmer: (videoBlob: Blob, initialFileName?: string, initialFormat?: ExportFormat) => void;
+  onOpenTrimmer: (videoBlob: Blob, initialFileName?: string, initialFormat?: ExportFormat, initialMetadata?: VideoMetadata) => void;
 }
 
 interface FloatingEmoji {
@@ -106,6 +122,19 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     sanitizeFileName(script.title ? script.title.replace(/[^\w\s-]/gi, '') : 'my_studio_take')
   );
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('mp4');
+
+  // Post-Recording Direct Export & Meta Hub State
+  const [recordedTakeBlob, setRecordedTakeBlob] = useState<Blob | null>(null);
+  const [showPostRecordExportHub, setShowPostRecordExportHub] = useState<boolean>(false);
+  const [takeDuration, setTakeDuration] = useState<number>(0);
+  const [takeVideoTitle, setTakeVideoTitle] = useState<string>(script.title || 'Debzane Studio Take');
+  const [takeDescription, setTakeDescription] = useState<string>('Official video recording produced with Debzane Concept Teleprompter.');
+  const [takeScriptWriteup, setTakeScriptWriteup] = useState<string>(script.content || '');
+  const [takeTags, setTakeTags] = useState<string>('DebzaneConcepts, Teleprompter, StudioRecording, PublicSpeaking, ViralContent');
+  const [copiedTakeMeta, setCopiedTakeMeta] = useState<boolean>(false);
+  const [isExportingDirect, setIsExportingDirect] = useState<boolean>(false);
+  const [exportSuccessMessage, setExportSuccessMessage] = useState<string>('');
+
 
   // Media Reference state
   const [mediaSourceUrl, setMediaSourceUrl] = useState<string>('');
@@ -659,7 +688,11 @@ export const StudioModal: React.FC<StudioModalProps> = ({
 
       recorder.onstop = () => {
         const fullBlob = new Blob(recordedChunksRef.current, { type: mimeType });
-        onOpenTrimmer(fullBlob, customFileName || 'my_studio_take', selectedFormat);
+        setRecordedTakeBlob(fullBlob);
+        setTakeDuration(recordingSeconds || 1);
+        setTakeVideoTitle(scriptTitle || script.title || 'Debzane Studio Take');
+        setTakeScriptWriteup(scriptContent || script.content || '');
+        setShowPostRecordExportHub(true);
       };
 
       recorder.start(1000);
@@ -691,6 +724,98 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       audioContextRef.current.close().catch(() => {});
     }
+  };
+
+  // Direct Clean Video & Meta Package Exporter (100% Deterministic / No-AI)
+  const handleDirectCleanExport = () => {
+    if (!recordedTakeBlob) return;
+    setIsExportingDirect(true);
+
+    const safeTitle = sanitizeFileName(takeVideoTitle || 'debzane_studio_take');
+    const ext = selectedFormat === 'mp4' ? 'mp4' : 'webm';
+    const videoFileName = `${safeTitle}_${Date.now().toString().slice(-4)}.${ext}`;
+
+    const currentMeta: VideoMetadata = {
+      title: takeVideoTitle || 'Debzane Studio Take',
+      description: takeDescription,
+      scriptContent: takeScriptWriteup,
+      tags: takeTags.split(/[,#\s]+/).filter(Boolean),
+      recordingDate: new Date().toLocaleString(),
+      durationSeconds: takeDuration,
+      resolution: '1080p Full HD',
+      format: selectedFormat,
+      creatorName: 'Debzane Creator',
+      organization: 'Debzane Concepts',
+      partner: 'JV ImpactVR Initiative LTD/GTE',
+      opaySupportAccount: '8057961025'
+    };
+
+    // 1. Download Video
+    downloadBlobFile(recordedTakeBlob, videoFileName);
+
+    // 2. Download Description & Social Tags (.txt)
+    downloadTextFile(generateMetadataText(currentMeta), `${safeTitle}_description.txt`);
+
+    // 3. Download WebVTT Subtitles (.vtt)
+    if (takeScriptWriteup.trim()) {
+      downloadTextFile(generateVTTSubtitles(takeScriptWriteup, takeDuration), `${safeTitle}_subtitles.vtt`, 'text/vtt');
+    }
+
+    // 4. Download JSON-LD Schema Metadata (.json)
+    downloadTextFile(generateMetadataJSON(currentMeta), `${safeTitle}_meta.json`, 'application/json');
+
+    confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 } });
+    setExportSuccessMessage('Clean video & complete metadata package exported successfully!');
+    setIsExportingDirect(false);
+  };
+
+  const handleCopyTakeMeta = () => {
+    const currentMeta: VideoMetadata = {
+      title: takeVideoTitle || 'Debzane Studio Take',
+      description: takeDescription,
+      scriptContent: takeScriptWriteup,
+      tags: takeTags.split(/[,#\s]+/).filter(Boolean),
+      recordingDate: new Date().toLocaleString(),
+      durationSeconds: takeDuration,
+      resolution: '1080p Full HD',
+      format: selectedFormat,
+      creatorName: 'Debzane Creator',
+      organization: 'Debzane Concepts',
+      partner: 'JV ImpactVR Initiative LTD/GTE',
+      opaySupportAccount: '8057961025'
+    };
+
+    const formatted = generateMetadataText(currentMeta);
+    navigator.clipboard.writeText(formatted).then(() => {
+      setCopiedTakeMeta(true);
+      setTimeout(() => setCopiedTakeMeta(false), 3000);
+    });
+  };
+
+  const handleOpenInEditor = () => {
+    if (!recordedTakeBlob) return;
+    const currentMeta: VideoMetadata = {
+      title: takeVideoTitle || 'Debzane Studio Take',
+      description: takeDescription,
+      scriptContent: takeScriptWriteup,
+      tags: takeTags.split(/[,#\s]+/).filter(Boolean),
+      recordingDate: new Date().toLocaleString(),
+      durationSeconds: takeDuration,
+      resolution: '1080p',
+      format: selectedFormat,
+      creatorName: 'Debzane Creator',
+      organization: 'Debzane Concepts',
+      partner: 'JV ImpactVR Initiative LTD/GTE',
+      opaySupportAccount: '8057961025'
+    };
+    setShowPostRecordExportHub(false);
+    onOpenTrimmer(recordedTakeBlob, takeVideoTitle || customFileName, selectedFormat, currentMeta);
+  };
+
+  const handleDiscardTake = () => {
+    setRecordedTakeBlob(null);
+    setShowPostRecordExportHub(false);
+    setExportSuccessMessage('');
   };
 
   // Reactions
@@ -1533,6 +1658,224 @@ export const StudioModal: React.FC<StudioModalProps> = ({
         </div>
 
       </footer>
+
+      {/* POST-RECORDING DIRECT EXPORT & METADATA PRODUCTION HUB MODAL */}
+      {showPostRecordExportHub && recordedTakeBlob && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-2 sm:p-4 md:p-6 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-4xl bg-slate-900 border border-amber-500/40 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden text-slate-100">
+            
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-800 bg-gradient-to-r from-debzane-blue-950/80 via-slate-900 to-amber-950/40 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl text-slate-950 shadow-lg shadow-amber-500/20">
+                  <Film className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-white font-heading">
+                      Take Recorded Successfully!
+                    </h3>
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-500/30">
+                      READY TO EXPORT
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Cleanly export your video directly with complete writeup, title, description, and social meta tags.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleDiscardTake}
+                className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+                title="Close and Return to Studio"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Success Banner */}
+            {exportSuccessMessage && (
+              <div className="mx-4 sm:mx-6 mt-4 p-3 bg-emerald-950/60 border border-emerald-500/50 rounded-2xl flex items-center justify-between gap-2 text-emerald-300 text-xs font-bold animate-in fade-in">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{exportSuccessMessage}</span>
+                </div>
+                <button
+                  onClick={() => setExportSuccessMessage('')}
+                  className="text-emerald-400 hover:text-white text-xs underline"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {/* Body */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 grid grid-cols-1 md:grid-cols-2 gap-5">
+              
+              {/* Left Column: Video Preview & Specs */}
+              <div className="space-y-4">
+                <div className="relative rounded-2xl overflow-hidden bg-black border border-slate-800 aspect-video shadow-inner flex items-center justify-center">
+                  <video
+                    src={URL.createObjectURL(recordedTakeBlob)}
+                    controls
+                    playsInline
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+
+                <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-3.5 space-y-2">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Take Production Specs:</span>
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 text-[10px] block">Duration:</span>
+                      <span className="font-mono text-amber-300 font-bold">
+                        {Math.floor(takeDuration / 60)}m {Math.floor(takeDuration % 60)}s
+                      </span>
+                    </div>
+                    <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 text-[10px] block">Format & Quality:</span>
+                      <span className="font-mono text-cyan-300 font-bold uppercase">
+                        {selectedFormat} (1080p HD)
+                      </span>
+                    </div>
+                    <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 text-[10px] block">Orientation:</span>
+                      <span className="text-slate-200 font-bold capitalize">
+                        {orientation}
+                      </span>
+                    </div>
+                    <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800">
+                      <span className="text-slate-400 text-[10px] block">Author / Org:</span>
+                      <span className="text-slate-200 font-bold truncate block">
+                        Debzane Concepts
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-debzane-blue-950/40 border border-debzane-blue-800/40 rounded-2xl p-3 text-[11px] text-slate-300">
+                  <span className="font-bold text-amber-300 block mb-0.5">📦 Clean Direct Package Includes:</span>
+                  <ul className="list-disc list-inside space-y-0.5 text-slate-400">
+                    <li>Clean Rendered Video File (<strong className="text-slate-200">.{selectedFormat}</strong>)</li>
+                    <li>Social Description & Speech Write-up (<strong className="text-slate-200">.txt</strong>)</li>
+                    <li>Synchronized WebVTT Subtitles (<strong className="text-slate-200">.vtt</strong>)</li>
+                    <li>JSON-LD Video Schema Meta (<strong className="text-slate-200">.json</strong>)</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Right Column: Title, Description, Script & Tags */}
+              <div className="space-y-3.5">
+                
+                {/* Video Title */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center justify-between">
+                    <span>Video Title:</span>
+                    <span className="text-[10px] text-amber-400 font-normal">Included in file & metadata</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={takeVideoTitle}
+                    onChange={(e) => setTakeVideoTitle(e.target.value)}
+                    placeholder="Enter video title..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-400 font-medium"
+                  />
+                </div>
+
+                {/* Short Description */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Synopsis / Short Description:
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={takeDescription}
+                    onChange={(e) => setTakeDescription(e.target.value)}
+                    placeholder="Short summary of this recording..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400 resize-none font-medium"
+                  />
+                </div>
+
+                {/* Script Write-Up */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center justify-between">
+                    <span>Teleprompter Script / Speech Write-Up:</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Auto-generates .vtt subtitles</span>
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={takeScriptWriteup}
+                    onChange={(e) => setTakeScriptWriteup(e.target.value)}
+                    placeholder="Full speech transcript..."
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-300 focus:outline-none focus:border-amber-400 resize-none font-sans"
+                  />
+                </div>
+
+                {/* Meta Tags */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Meta Tags & Hashtags (Comma Separated):</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={takeTags}
+                    onChange={(e) => setTakeTags(e.target.value)}
+                    placeholder="DebzaneConcepts, Teleprompter, ViralVideo, PublicSpeaking"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-cyan-300 font-mono focus:outline-none focus:border-cyan-400"
+                  />
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* Footer Action Controls */}
+            <div className="p-4 sm:p-5 border-t border-slate-800 bg-slate-950 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  onClick={handleDiscardTake}
+                  className="px-3.5 py-2.5 text-xs font-bold text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl transition-all"
+                >
+                  Discard & Re-Record
+                </button>
+                <button
+                  onClick={handleCopyTakeMeta}
+                  className="px-3.5 py-2.5 text-xs font-bold text-amber-300 bg-amber-950/60 hover:bg-amber-900/60 border border-amber-500/40 rounded-xl flex items-center gap-1.5 transition-all active:scale-95"
+                  title="Copy full YouTube & social description block with writeup and tags"
+                >
+                  {copiedTakeMeta ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedTakeMeta ? 'Meta Copied!' : 'Copy Social Meta'}</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  onClick={handleOpenInEditor}
+                  className="flex-1 sm:flex-initial px-4 py-2.5 text-xs font-bold text-cyan-300 bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-500/40 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                >
+                  <Scissors className="w-4 h-4 text-cyan-400" />
+                  <span>Open in Video Editor</span>
+                </button>
+
+                <button
+                  onClick={handleDirectCleanExport}
+                  disabled={isExportingDirect}
+                  className="flex-1 sm:flex-initial px-5 py-2.5 text-xs font-black text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 rounded-xl shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{isExportingDirect ? 'Exporting Package...' : 'Direct Clean Export (Video + Meta)'}</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

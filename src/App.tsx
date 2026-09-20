@@ -27,7 +27,7 @@ import {
 
 import { InstallPrompt } from './components/InstallPrompt';
 import { AccessibilityFloating } from './components/AccessibilityFloating';
-import { ExportFormat } from './types';
+import { ExportFormat, VideoMetadata } from './types';
 
 export function App() {
   const {
@@ -51,11 +51,13 @@ export function App() {
   const [trimmerBlob, setTrimmerBlob] = useState<Blob | null>(null);
   const [trimmerFileName, setTrimmerFileName] = useState<string>('my_studio_take');
   const [trimmerFormat, setTrimmerFormat] = useState<ExportFormat>('mp4');
+  const [trimmerMetadata, setTrimmerMetadata] = useState<VideoMetadata | undefined>(undefined);
   const [isDonateOpen, setIsDonateOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isOwnerModalOpen, setIsOwnerModalOpen] = useState(false);
   const [isDonateReminder, setIsDonateReminder] = useState(false);
+
 
   // Register Offline PWA Service Worker
   React.useEffect(() => {
@@ -314,11 +316,12 @@ export function App() {
           script={activeScript}
           settings={settings}
           onUpdateSetting={updateSetting}
-          onOpenTrimmer={(blob, fileName, format) => {
+          onOpenTrimmer={(blob, fileName, format, meta) => {
             setIsStudioOpen(false);
             setTrimmerBlob(blob);
             if (fileName) setTrimmerFileName(fileName);
             if (format) setTrimmerFormat(format);
+            setTrimmerMetadata(meta);
           }}
         />
       )}
@@ -329,7 +332,11 @@ export function App() {
           videoBlob={trimmerBlob}
           initialFileName={trimmerFileName}
           initialFormat={trimmerFormat}
-          onClose={() => setTrimmerBlob(null)}
+          initialMetadata={trimmerMetadata}
+          onClose={() => {
+            setTrimmerBlob(null);
+            setTrimmerMetadata(undefined);
+          }}
           onSave={(trimmedBlob, filename) => {
             const url = URL.createObjectURL(trimmedBlob);
             const a = document.createElement('a');
@@ -338,6 +345,7 @@ export function App() {
             a.click();
             URL.revokeObjectURL(url);
             setTrimmerBlob(null);
+            setTrimmerMetadata(undefined);
           }}
         />
       )}
