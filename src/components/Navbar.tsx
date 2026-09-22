@@ -14,7 +14,9 @@ import {
   Activity,
   Linkedin,
   Facebook,
-  Radio
+  Radio,
+  Smartphone,
+  Download
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -96,6 +98,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Radio className="w-3.5 h-3.5 text-white animate-pulse" />
             <span className="inline">Studio</span>
+          </button>
+
+          {/* Install App Button for iPhone & Android */}
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('open-debzane-install'))}
+            className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/40 rounded-xl transition-all shadow-sm active:scale-95"
+            title="Install on iPhone, iPad, Android or PC"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="inline">Install</span>
           </button>
 
           {/* User Reviews */}

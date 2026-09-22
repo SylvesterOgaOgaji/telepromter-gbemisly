@@ -1,16 +1,25 @@
 {
   "name": "Debzane Concept Teleprompter",
-  "short_name": "DebzanePrompter",
+  "short_name": "Debzane Prompter",
   "description": "100% Free professional studio teleprompter with mirror mode, wake-lock, and offline storage. Powered by JV Impact Initiative for Debzane Concepts.",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#030914",
-  "theme_color": "#0e8ee9",
+  "theme_color": "#051b33",
   "orientation": "any",
+  "categories": ["multimedia", "productivity", "utilities"],
   "icons": [
     {
       "src": "/debzane-logo.jpg",
-      "sizes": "500x500",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/debzane-logo.jpg",
+      "sizes": "512x512",
       "type": "image/jpeg",
       "purpose": "any maskable"
     }

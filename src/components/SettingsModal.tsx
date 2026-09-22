@@ -264,10 +264,45 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {activeTab === 'mobile' && (
             <div className="space-y-3">
+              {/* iPhone / iPad Install Guide */}
               <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
-                <h4 className="font-bold text-teal-300">Capacitor Android & Cloudflare R2 Deployment</h4>
-                <p className="text-slate-400 leading-relaxed">
-                  Debzain Concept Teleprompter is fully packaged for Android devices. You can install it straight as a web APK or build with Android Studio using:
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-amber-300 flex items-center gap-1.5 text-xs">
+                    <span>📱 iPhone & iPad Safari PWA Install:</span>
+                  </h4>
+                  <button
+                    onClick={() => {
+                      onClose();
+                      window.dispatchEvent(new CustomEvent('open-debzane-install'));
+                    }}
+                    className="px-2.5 py-1 text-[11px] font-bold bg-amber-400 text-slate-950 rounded-lg hover:bg-amber-300 transition-all"
+                  >
+                    Open iOS Guide
+                  </button>
+                </div>
+                <p className="text-slate-400 text-xs leading-relaxed">
+                  On iPhone, tap the Safari <strong>Share button (⎋)</strong> at the bottom, scroll down and tap <strong>"Add to Home Screen (+)"</strong>, then tap <strong>Add</strong>.
+                </p>
+              </div>
+
+              {/* Android Install Guide */}
+              <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-teal-300 flex items-center gap-1.5 text-xs">
+                    <span>🤖 Android PWA & Native APK:</span>
+                  </h4>
+                  <button
+                    onClick={() => {
+                      onClose();
+                      window.dispatchEvent(new CustomEvent('open-debzane-install'));
+                    }}
+                    className="px-2.5 py-1 text-[11px] font-bold bg-teal-400 text-slate-950 rounded-lg hover:bg-teal-300 transition-all"
+                  >
+                    Install on Android
+                  </button>
+                </div>
+                <p className="text-slate-400 text-xs leading-relaxed">
+                  Tap "Install on Android" or tap the three dots (⋮) in Chrome and select "Install App". For native APK build:
                 </p>
                 <div className="p-2.5 bg-slate-900 rounded-lg font-mono text-[11px] text-teal-300 space-y-1">
                   <div>npm run build</div>
@@ -277,8 +312,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
-              <div className="p-3 bg-teal-950/30 border border-teal-500/30 rounded-xl text-slate-300">
-                <strong className="text-teal-300">10GB Free Cloudflare R2 Storage:</strong> All static builds and user script audio assets can be served completely free with zero egress fees via Cloudflare R2 & Pages.
+              <div className="p-3 bg-teal-950/30 border border-teal-500/30 rounded-xl text-slate-300 text-xs">
+                <strong className="text-teal-300">100% Free Offline Storage:</strong> Debzane Prompter runs completely standalone without browser address bars on both iOS and Android.
               </div>
             </div>
           )}
