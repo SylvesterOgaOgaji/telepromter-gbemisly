@@ -7,7 +7,9 @@ import {
   exportReviewsToJSON,
   importReviewsFromJSON,
   checkBrowserPersistence,
-  enableBrowserPersistence
+  enableBrowserPersistence,
+  getDeviceUserReview,
+  hasUserReviewed
 } from '../services/persistentReviewStorage';
 import { 
   MessageSquareHeart, 
@@ -22,17 +24,26 @@ import {
   ShieldCheck,
   Trash2,
   ExternalLink,
-  Database
+  Database,
+  Edit3,
+  ArrowRight
 } from 'lucide-react';
 
 interface FeedbackModalProps {
   isOpen: boolean;
   onClose: () => void;
   isMandatory?: boolean;
+  onSuccessProceed?: () => void;
 }
 
-export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, isMandatory = false }) => {
+export const FeedbackModal: React.FC<FeedbackModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  isMandatory = false,
+  onSuccessProceed 
+}) => {
   const [comments, setComments] = useState<FeedbackComment[]>([]);
+  const [existingReviewId, setExistingReviewId] = useState<string | null>(null);
   const [userName, setUserName] = useState('');
   const [country, setCountry] = useState('');
   const [rating, setRating] = useState(5);
@@ -40,14 +51,29 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, i
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
   const [isPersisted, setIsPersisted] = useState(false);
+  const [hasExistingReview, setHasExistingReview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      // 1. Fetch persistent reviews from IndexedDB
+      // 1. Check if this device already has an existing review
+      const userReview = getDeviceUserReview();
+      if (userReview) {
+        setHasExistingReview(true);
+        setExistingReviewId(userReview.id);
+        setUserName(userReview.userName || '');
+        setCountry(userReview.country || '');
+        setRating(userReview.rating || 5);
+        setMessage(userReview.message || '');
+      } else {
+        setHasExistingReview(false);
+        setExistingReviewId(null);
+      }
+
+      // 2. Fetch persistent reviews from IndexedDB
       getPersistentReviews().then(setComments);
       
-      // 2. Request / check browser durable persistence API
+      // 3. Request / check browser durable persistence API
       checkBrowserPersistence().then((persisted) => {
         setIsPersisted(persisted);
         if (!persisted) {
@@ -65,27 +91,28 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, i
 
     setIsSubmitting(true);
     await addPersistentReview({
+      id: existingReviewId || undefined,
       userName: userName.trim(),
       country: country.trim() || 'Global',
       rating,
       message: message.trim()
     });
 
-    // Mark testimonial submitted
-    localStorage.setItem('debzane_testimonial_submitted_v1', Date.now().toString());
-
     const updated = await getPersistentReviews();
     setComments(updated);
     setIsSubmitting(false);
     setSubmittedSuccess(true);
+    setHasExistingReview(true);
 
     setTimeout(() => {
       setSubmittedSuccess(false);
-      setMessage('');
+      if (onSuccessProceed) {
+        onSuccessProceed();
+      }
       if (isMandatory) {
         onClose();
       }
-    }, 2500);
+    }, 1800);
   };
 
   const handleDelete = async (id: string) => {
@@ -93,6 +120,11 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, i
       await deletePersistentReview(id);
       const updated = await getPersistentReviews();
       setComments(updated);
+      if (existingReviewId === id) {
+        setHasExistingReview(false);
+        setExistingReviewId(null);
+        setMessage('');
+      }
     }
   };
 
@@ -136,11 +168,11 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, i
                 </h2>
                 <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
                   <ShieldCheck className="w-3 h-3" />
-                  Browser Persistent (IndexedDB)
+                  100% Genuine User Reviews
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Debzane Concept Teleprompter feedback & reviews stored permanently in your browser
+                Debzane Concept Teleprompter feedback & reviews stored permanently in browser IndexedDB
               </p>
             </div>
           </div>
@@ -154,18 +186,47 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, i
 
         <div className="flex-1 overflow-y-auto py-3.5 space-y-4 pr-1">
           
-          {/* October 1st Community Testimonial Notice */}
+          {/* October 1st Creator Review Requirement Notice */}
           {isMandatory && (
-            <div className="p-3.5 bg-gradient-to-r from-amber-500/20 via-amber-950/40 to-slate-900 border border-amber-400/50 rounded-2xl flex items-start gap-3 text-amber-300 text-xs shadow-lg">
-              <Sparkles className="w-5 h-5 text-amber-400 shrink-0 mt-0.5 animate-pulse" />
-              <div>
-                <h4 className="font-bold text-white text-xs mb-0.5">
-                  🌟 Community Testimonial Notice (Active from October 1st):
-                </h4>
-                <p className="text-slate-300 text-[11px] leading-relaxed">
-                  To celebrate keeping Debzane Concept Teleprompter <strong>100% free forever</strong> with zero paywalls, we kindly invite every creator to submit one quick review. Fill in your name & feedback below to continue!
-                </p>
+            <div className="p-3.5 bg-gradient-to-r from-amber-500/20 via-amber-950/40 to-slate-900 border border-amber-400/50 rounded-2xl flex items-start justify-between gap-3 text-amber-300 text-xs shadow-lg">
+              <div className="flex items-start gap-2.5">
+                <Sparkles className="w-5 h-5 text-amber-400 shrink-0 mt-0.5 animate-pulse" />
+                <div>
+                  <h4 className="font-bold text-white text-xs mb-0.5">
+                    🌟 1-Time Creator Review Before Download:
+                  </h4>
+                  <p className="text-slate-300 text-[11px] leading-relaxed">
+                    To keep Debzane Concept Teleprompter <strong>100% free forever</strong> with zero paywalls, we require every creator on this device to submit one genuine review before downloading.
+                  </p>
+                </div>
               </div>
+
+              {hasExistingReview && onSuccessProceed && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSuccessProceed();
+                    onClose();
+                  }}
+                  className="shrink-0 flex items-center gap-1 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs shadow transition-all"
+                >
+                  <span>Skip & Download</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Existing Review detected on this device */}
+          {hasExistingReview && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center justify-between text-xs text-emerald-300">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>You have already submitted a review from this device. You can edit or refine your review below.</span>
+              </div>
+              <span className="text-[10px] bg-emerald-500/20 px-2 py-0.5 rounded-full font-bold border border-emerald-500/40">
+                1 Review / Device
+              </span>
             </div>
           )}
 
@@ -228,12 +289,12 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, i
             </a>
           </div>
 
-          {/* Submit Review Form */}
+          {/* Submit / Edit Review Form */}
           <form onSubmit={handleSubmit} className="p-4 bg-slate-950/90 border border-slate-800 rounded-2xl space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5" />
-                Add Your Persistent Review
+                {hasExistingReview ? <Edit3 className="w-3.5 h-3.5" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {hasExistingReview ? 'Edit Your Saved Review' : 'Add Your Review (1 Per Device)'}
               </h3>
               
               {/* Star Rating picker */}
@@ -262,7 +323,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, i
               />
               <input
                 type="text"
-                placeholder="Location / Country (e.g. Lagos / London)"
+                placeholder="Location / Country (e.g. Nigeria / UK / USA)"
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
                 className="px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400"
@@ -282,11 +343,11 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, i
               {submittedSuccess ? (
                 <span className="flex items-center gap-1.5 text-xs text-amber-300 font-semibold animate-pulse">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  Thank you! Your review is permanently saved in browser IndexedDB.
+                  {hasExistingReview ? 'Review updated successfully!' : 'Thank you! Your review is permanently saved.'}
                 </span>
               ) : (
                 <span className="text-[11px] text-slate-500">
-                  Durable offline storage • Non-evictable browser database
+                  {hasExistingReview ? 'Updating your review for this device' : 'Stored securely • 1 review per creator device'}
                 </span>
               )}
 
@@ -296,7 +357,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, i
                 className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 disabled:opacity-50 disabled:pointer-events-none rounded-xl transition-all"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{isSubmitting ? 'Saving...' : 'Post Review'}</span>
+                <span>{isSubmitting ? 'Saving...' : hasExistingReview ? 'Update My Review' : 'Post Review'}</span>
               </button>
             </div>
           </form>
@@ -304,53 +365,65 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, i
           {/* Existing Comments List */}
           <div className="space-y-2.5">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Saved Creator Reviews ({comments.length})
+              Verified Creator Reviews ({comments.length})
             </h3>
 
-            {comments.map((c) => (
-              <div key={c.id} className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-2xl space-y-1.5 group">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-amber-400 font-bold text-[11px]">
-                      {c.userName.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                        <span>{c.userName}</span>
-                        {c.country && (
-                          <span className="text-[10px] text-slate-500 font-normal">({c.country})</span>
-                        )}
-                        {c.date && (
-                          <span className="text-[10px] text-slate-600 font-mono">• {c.date}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-0.5">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <Star
-                          key={i}
-                          className={`w-3 h-3 ${i < c.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-800'}`}
-                        />
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => handleDelete(c.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-red-400 transition-opacity"
-                      title="Delete review"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                <p className="text-xs text-slate-300 leading-relaxed pl-8">
-                  "{c.message}"
+            {comments.length === 0 ? (
+              <div className="p-6 bg-slate-950/40 border border-dashed border-slate-800 rounded-2xl text-center space-y-2">
+                <MessageSquareHeart className="w-8 h-8 text-amber-400/60 mx-auto" />
+                <p className="text-xs text-slate-300 font-bold">
+                  No public reviews submitted yet!
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Be the very first creator to share your thoughts, rating, and feedback using the form above.
                 </p>
               </div>
-            ))}
+            ) : (
+              comments.map((c) => (
+                <div key={c.id} className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-2xl space-y-1.5 group">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-amber-400 font-bold text-[11px]">
+                        {c.userName.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                          <span>{c.userName}</span>
+                          {c.country && (
+                            <span className="text-[10px] text-slate-500 font-normal">({c.country})</span>
+                          )}
+                          {c.date && (
+                            <span className="text-[10px] text-slate-600 font-mono">• {c.date}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-0.5">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star
+                            key={i}
+                            className={`w-3 h-3 ${i < c.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-800'}`}
+                          />
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => handleDelete(c.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-red-400 transition-opacity"
+                        title="Delete review"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-300 leading-relaxed pl-8">
+                    "{c.message}"
+                  </p>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

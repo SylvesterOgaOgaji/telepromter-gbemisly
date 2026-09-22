@@ -67,6 +67,8 @@ import {
   downloadBlobFile,
   VideoMetadata
 } from '../utils/mediaExport';
+import { FeedbackModal } from './FeedbackModal';
+import { hasUserReviewed, isOctober1stReviewRequired } from '../services/persistentReviewStorage';
 
 interface StudioModalProps {
   isOpen: boolean;
@@ -726,8 +728,10 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     }
   };
 
+  const [isReviewGateOpen, setIsReviewGateOpen] = useState(false);
+
   // Direct Clean Video & Meta Package Exporter (100% Deterministic / No-AI)
-  const handleDirectCleanExport = () => {
+  const executeDirectExport = () => {
     if (!recordedTakeBlob) return;
     setIsExportingDirect(true);
 
@@ -767,6 +771,15 @@ export const StudioModal: React.FC<StudioModalProps> = ({
     confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 } });
     setExportSuccessMessage('Clean video & complete metadata package exported successfully!');
     setIsExportingDirect(false);
+  };
+
+  const handleDirectCleanExport = () => {
+    if (!recordedTakeBlob) return;
+    if (isOctober1stReviewRequired() && !hasUserReviewed()) {
+      setIsReviewGateOpen(true);
+      return;
+    }
+    executeDirectExport();
   };
 
   const handleCopyTakeMeta = () => {
@@ -1876,6 +1889,17 @@ export const StudioModal: React.FC<StudioModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Review Gate Modal (1-time review before download) */}
+      <FeedbackModal
+        isOpen={isReviewGateOpen}
+        onClose={() => setIsReviewGateOpen(false)}
+        isMandatory={true}
+        onSuccessProceed={() => {
+          setIsReviewGateOpen(false);
+          executeDirectExport();
+        }}
+      />
 
     </div>
   );

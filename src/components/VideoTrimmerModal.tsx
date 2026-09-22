@@ -34,6 +34,8 @@ import {
   downloadTextFile,
   VideoMetadata
 } from '../utils/mediaExport';
+import { FeedbackModal } from './FeedbackModal';
+import { hasUserReviewed, isOctober1stReviewRequired } from '../services/persistentReviewStorage';
 
 interface VideoTrimmerModalProps {
   videoBlob: Blob;
@@ -226,8 +228,10 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
     });
   };
 
+  const [isReviewGateOpen, setIsReviewGateOpen] = useState(false);
+
   // Master CapCut Export Engine
-  const handleExport = async () => {
+  const executeExportProcess = async () => {
     setIsProcessing(true);
     setProgressPercent(10);
 
@@ -440,6 +444,14 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
       downloadSidecars();
       setIsProcessing(false);
     }
+  };
+
+  const handleExport = () => {
+    if (isOctober1stReviewRequired() && !hasUserReviewed()) {
+      setIsReviewGateOpen(true);
+      return;
+    }
+    executeExportProcess();
   };
 
   return (
@@ -1129,6 +1141,18 @@ export const VideoTrimmerModal: React.FC<VideoTrimmerModalProps> = ({
         </div>
 
       </div>
+
+      {/* 1-Time Review Gate Modal before downloading */}
+      <FeedbackModal
+        isOpen={isReviewGateOpen}
+        onClose={() => setIsReviewGateOpen(false)}
+        isMandatory={true}
+        onSuccessProceed={() => {
+          setIsReviewGateOpen(false);
+          executeExportProcess();
+        }}
+      />
+
     </div>
   );
 };
