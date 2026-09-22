@@ -28,9 +28,10 @@ import {
 interface FeedbackModalProps {
   isOpen: boolean;
   onClose: () => void;
+  isMandatory?: boolean;
 }
 
-export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
+export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, isMandatory = false }) => {
   const [comments, setComments] = useState<FeedbackComment[]>([]);
   const [userName, setUserName] = useState('');
   const [country, setCountry] = useState('');
@@ -70,6 +71,9 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
       message: message.trim()
     });
 
+    // Mark testimonial submitted
+    localStorage.setItem('debzane_testimonial_submitted_v1', Date.now().toString());
+
     const updated = await getPersistentReviews();
     setComments(updated);
     setIsSubmitting(false);
@@ -78,7 +82,10 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
     setTimeout(() => {
       setSubmittedSuccess(false);
       setMessage('');
-    }, 4000);
+      if (isMandatory) {
+        onClose();
+      }
+    }, 2500);
   };
 
   const handleDelete = async (id: string) => {
@@ -147,6 +154,21 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose })
 
         <div className="flex-1 overflow-y-auto py-3.5 space-y-4 pr-1">
           
+          {/* October 1st Community Testimonial Notice */}
+          {isMandatory && (
+            <div className="p-3.5 bg-gradient-to-r from-amber-500/20 via-amber-950/40 to-slate-900 border border-amber-400/50 rounded-2xl flex items-start gap-3 text-amber-300 text-xs shadow-lg">
+              <Sparkles className="w-5 h-5 text-amber-400 shrink-0 mt-0.5 animate-pulse" />
+              <div>
+                <h4 className="font-bold text-white text-xs mb-0.5">
+                  🌟 Community Testimonial Notice (Active from October 1st):
+                </h4>
+                <p className="text-slate-300 text-[11px] leading-relaxed">
+                  To celebrate keeping Debzane Concept Teleprompter <strong>100% free forever</strong> with zero paywalls, we kindly invite every creator to submit one quick review. Fill in your name & feedback below to continue!
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Persistence & Backup Bar */}
           <div className="p-2.5 bg-slate-950/80 border border-slate-800/80 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2 text-slate-300">

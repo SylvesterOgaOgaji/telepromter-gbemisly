@@ -27,6 +27,8 @@ import {
 
 import { InstallPrompt } from './components/InstallPrompt';
 import { AccessibilityFloating } from './components/AccessibilityFloating';
+import { LiveStatsBar } from './components/LiveStatsBar';
+import { CommunityTestimonialsWall } from './components/CommunityTestimonialsWall';
 import { ExportFormat, VideoMetadata } from './types';
 
 export function App() {
@@ -54,10 +56,10 @@ export function App() {
   const [trimmerMetadata, setTrimmerMetadata] = useState<VideoMetadata | undefined>(undefined);
   const [isDonateOpen, setIsDonateOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [isMandatoryFeedback, setIsMandatoryFeedback] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isOwnerModalOpen, setIsOwnerModalOpen] = useState(false);
   const [isDonateReminder, setIsDonateReminder] = useState(false);
-
 
   // Register Offline PWA Service Worker
   React.useEffect(() => {
@@ -67,6 +69,22 @@ export function App() {
       });
     }
   }, []);
+
+  // Check for October 1st Mandatory Testimonial requirement
+  React.useEffect(() => {
+    const today = new Date();
+    const octFirst2026 = new Date('2026-10-01T00:00:00');
+    const hasSubmitted = localStorage.getItem('debzane_testimonial_submitted_v1');
+
+    if (today >= octFirst2026 && !hasSubmitted) {
+      const timer = setTimeout(() => {
+        setIsMandatoryFeedback(true);
+        setIsFeedbackOpen(true);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
 
   // Track session usage count to show gentle donation reminder
   const handleLaunchPrompter = () => {
@@ -110,6 +128,9 @@ export function App() {
             onOpenOwnerProfile={() => setIsOwnerModalOpen(true)}
             onOpenStudio={() => setIsStudioOpen(true)}
           />
+
+          {/* Live Visitor & Today Clicks Real-Time Counter Bar */}
+          <LiveStatsBar onOpenFeedback={() => setIsFeedbackOpen(true)} />
 
           {/* Main Content Area */}
           <main className="flex-1">
@@ -299,6 +320,9 @@ export function App() {
 
             </div>
           </footer>
+
+          {/* Community Testimonials & Wall of Praise */}
+          <CommunityTestimonialsWall onOpenFeedback={() => setIsFeedbackOpen(true)} />
         </>
       )}
 
@@ -370,7 +394,11 @@ export function App() {
       {/* Community Comments & Reviews Modal */}
       <FeedbackModal
         isOpen={isFeedbackOpen}
-        onClose={() => setIsFeedbackOpen(false)}
+        isMandatory={isMandatoryFeedback}
+        onClose={() => {
+          setIsFeedbackOpen(false);
+          setIsMandatoryFeedback(false);
+        }}
       />
 
       {/* Settings Modal */}
