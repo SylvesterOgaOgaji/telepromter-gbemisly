@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Accessibility, 
   Volume2, 
@@ -14,7 +14,8 @@ import {
   Sparkles,
   HelpCircle,
   Play,
-  Square
+  Square,
+  Move
 } from 'lucide-react';
 
 interface AccessibilityFloatingProps {
@@ -29,6 +30,78 @@ export const AccessibilityFloating: React.FC<AccessibilityFloatingProps> = ({ cu
   const [isReadingAloud, setIsReadingAloud] = useState(false);
   const [speechRate, setSpeechRate] = useState(1.0);
   const [voiceAssistance, setVoiceAssistance] = useState(false);
+
+  // Position state for movable draggable accessibility button
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef<{ startX: number; startY: number; posX: number; posY: number }>({ startX: 0, startY: 0, posX: 0, posY: 0 });
+  const hasMovedRef = useRef(false);
+  const buttonRef = useRef<HTMLDivElement>(null);
+
+  // Initialize position to top-right on mount
+  useEffect(() => {
+    const initialX = Math.max(16, window.innerWidth - 180);
+    const initialY = 80;
+    setPosition({ x: initialX, y: initialY });
+  }, []);
+
+  // Global mouse & touch move / up listeners for smooth dragging
+  useEffect(() => {
+    const handleMove = (clientX: number, clientY: number) => {
+      if (!isDraggingRef.current) return;
+      const dx = clientX - dragStartRef.current.startX;
+      const dy = clientY - dragStartRef.current.startY;
+
+      if (Math.hypot(dx, dy) > 4) {
+        hasMovedRef.current = true;
+      }
+
+      const buttonWidth = buttonRef.current?.offsetWidth || 150;
+      const buttonHeight = buttonRef.current?.offsetHeight || 44;
+
+      const newX = Math.min(Math.max(8, dragStartRef.current.posX + dx), window.innerWidth - buttonWidth - 8);
+      const newY = Math.min(Math.max(8, dragStartRef.current.posY + dy), window.innerHeight - buttonHeight - 8);
+
+      setPosition({ x: newX, y: newY });
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      handleMove(e.clientX, e.clientY);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        handleMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+
+    const handleEnd = () => {
+      isDraggingRef.current = false;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    window.addEventListener('touchend', handleEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+  }, []);
+
+  const handleStartDrag = (clientX: number, clientY: number) => {
+    isDraggingRef.current = true;
+    hasMovedRef.current = false;
+    dragStartRef.current = {
+      startX: clientX,
+      startY: clientY,
+      posX: position?.x || (window.innerWidth - 180),
+      posY: position?.y || 80
+    };
+  };
 
   // Apply High Contrast mode globally
   useEffect(() => {
@@ -81,16 +154,36 @@ export const AccessibilityFloating: React.FC<AccessibilityFloatingProps> = ({ cu
 
   return (
     <>
-      {/* Floating Red / Gold Accessibility Badge at Top Right */}
-      <div className="fixed top-20 right-3 sm:right-6 z-50 flex items-center">
+      {/* Draggable Floating Accessibility Badge */}
+      <div 
+        ref={buttonRef}
+        style={{
+          position: 'fixed',
+          left: position ? `${position.x}px` : undefined,
+          top: position ? `${position.y}px` : '80px',
+          right: position ? undefined : '16px',
+          zIndex: 50,
+          touchAction: 'none'
+        }}
+        className="flex items-center select-none cursor-move"
+        onMouseDown={(e) => handleStartDrag(e.clientX, e.clientY)}
+        onTouchStart={(e) => {
+          if (e.touches.length > 0) {
+            handleStartDrag(e.touches[0].clientX, e.touches[0].clientY);
+          }
+        }}
+      >
         <button
           onClick={() => {
-            setIsOpen(!isOpen);
-            playVoiceAnnouncement('Accessibility menu opened');
+            if (!hasMovedRef.current) {
+              setIsOpen(!isOpen);
+              playVoiceAnnouncement('Accessibility menu toggled');
+            }
           }}
-          className="group relative flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-extrabold text-xs rounded-full shadow-2xl border-2 border-white/80 hover:scale-105 transition-all shadow-red-600/40"
-          title="Disability & Accessibility Features (Eye, Ear, Hands)"
+          className="group relative flex items-center gap-1.5 px-3 py-2 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-extrabold text-xs rounded-full shadow-2xl border-2 border-white/80 transition-transform active:scale-95 shadow-red-600/40"
+          title="Drag to move anywhere • Click to open Accessibility Options"
         >
+          <Move className="w-3 h-3 opacity-70 group-hover:opacity-100" />
           <Accessibility className="w-4 h-4 animate-spin-slow text-white" />
           <span className="tracking-wide">ACCESSIBILITY</span>
           <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1"></span>
@@ -99,7 +192,16 @@ export const AccessibilityFloating: React.FC<AccessibilityFloatingProps> = ({ cu
 
       {/* Floating Accessibility Controls Drawer */}
       {isOpen && (
-        <div className="fixed top-28 right-3 sm:right-6 w-80 sm:w-88 bg-slate-950/98 border-2 border-red-500/60 rounded-3xl p-5 shadow-2xl shadow-black z-50 backdrop-blur-2xl text-slate-100 animate-in fade-in slide-in-from-top-4 duration-200">
+        <div 
+          style={{
+            position: 'fixed',
+            left: position ? `${Math.min(Math.max(12, position.x - 140), window.innerWidth - 340)}px` : undefined,
+            top: position ? `${Math.min(position.y + 50, window.innerHeight - 440)}px` : '120px',
+            right: position ? undefined : '16px',
+            zIndex: 60
+          }}
+          className="w-80 sm:w-88 max-h-[85vh] overflow-y-auto bg-slate-950/98 border-2 border-red-500/60 rounded-3xl p-5 shadow-2xl shadow-black backdrop-blur-2xl text-slate-100 animate-in fade-in slide-in-from-top-4 duration-200"
+        >
           
           <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3.5">
             <div className="flex items-center gap-2">

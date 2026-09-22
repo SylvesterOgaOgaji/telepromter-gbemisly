@@ -1,4 +1,4 @@
-// Cloudflare Pages Serverless Function for Live Usage Statistics & Visitor Clicks
+// Cloudflare Pages Serverless Function for 100% Sincere Real-Time Statistics
 // Endpoint: /api/stats (GET & POST)
 
 interface Env {
@@ -9,9 +9,9 @@ export const onRequestGet = async (context: { env: Env }) => {
   const { env } = context;
   const todayKey = new Date().toISOString().split('T')[0];
 
-  let todayClicks = 1480;
-  let totalSpeeches = 12650;
-  let activeUsers = 38;
+  let todayClicks = 0;
+  let totalSpeeches = 0;
+  let activeUsers = 1;
 
   try {
     if (env.DEBZANE_KV) {
@@ -27,17 +27,13 @@ export const onRequestGet = async (context: { env: Env }) => {
     }
   } catch (e) {}
 
-  // Add minute-based organic variance so the counter reflects real-time activity
-  const minuteVariance = Math.floor((Date.now() / 60000) % 45);
-  const currentTodayCount = todayClicks + minuteVariance;
-  const dynamicActiveUsers = Math.max(12, Math.floor(25 + ((Date.now() / 15000) % 30)));
-
   return new Response(JSON.stringify({
-    todayClicks: currentTodayCount,
-    totalSpeeches: totalSpeeches + Math.floor(minuteVariance / 2),
-    activeUsersNow: dynamicActiveUsers,
+    todayClicks,
+    totalSpeeches,
+    activeUsersNow: activeUsers,
     date: todayKey,
-    status: 'online'
+    status: 'online',
+    isGenuine: true
   }), {
     headers: {
       'Content-Type': 'application/json',
@@ -51,13 +47,13 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
   const { env } = context;
   const todayKey = new Date().toISOString().split('T')[0];
 
-  let todayClicks = 1480;
-  let totalSpeeches = 12650;
+  let todayClicks = 1;
+  let totalSpeeches = 0;
 
   try {
     if (env.DEBZANE_KV) {
       const storedToday = await env.DEBZANE_KV.get(`stats_clicks_${todayKey}`, { type: 'json' });
-      const current = (storedToday && typeof storedToday === 'number') ? storedToday : 1480;
+      const current = (storedToday && typeof storedToday === 'number') ? storedToday : 0;
       todayClicks = current + 1;
       await env.DEBZANE_KV.put(`stats_clicks_${todayKey}`, JSON.stringify(todayClicks));
 
@@ -70,7 +66,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
 
   return new Response(JSON.stringify({
     success: true,
-    todayClicks: todayClicks + 1,
+    todayClicks,
     totalSpeeches,
     timestamp: Date.now()
   }), {
